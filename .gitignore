@@ -1,0 +1,79 @@
+# ------------------------------------
+# Dependencies and Node Modules
+# ------------------------------------
+
+# npm packages
+/node_modules
+# Lock files
+package-lock.json
+# yarn and pnpm lock files (if used)
+yarn.lock
+pnpm-lock.yaml
+
+
+# ------------------------------------
+# Build / Compiled Files (if applicable)
+# ------------------------------------
+
+# Production build output folder
+/dist
+/build
+
+# TypeScript, Babel, or other compiled files
+/ts-output/
+/*.js.map
+*.d.ts
+
+
+# ------------------------------------
+# Log Files and Crash Reports
+# ------------------------------------
+
+# Logs and debug files
+npm-debug.log*
+.npm/
+.node_repl_history
+
+# Node.js process dump files
+/coverage
+*.sqlite
+*.wctf
+
+
+# ------------------------------------
+# Environment Variables & Secrets
+# ------------------------------------
+
+# Environment variables file (VERY IMPORTANT for secrets)
+.env
+.env.*
+!.env.example # Keep the example file to show required variables
+
+# Local configuration files
+*.local
+
+
+# ------------------------------------
+# OS and Editor Specific Files
+# ------------------------------------
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# VS Code
+.vscode/
+
+# Atom
+.atom/
+
+# JetBrains IDEs (WebStorm, IntelliJ)
+.idea/
+
+# Vim
+*~
+.swp
+.swo
