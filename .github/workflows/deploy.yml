@@ -25,12 +25,16 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           push: true
-          tags: ${{ secrets.DOCKER_IMAGE_NAME }}:${{ secrets.DOCKER_TAG }}
+          tags: ${{ secrets.DOCKER_IMAGE_NAME }}:latest
       
       - name: Trigger deployment webhook
         run: |
           curl -X POST \
             -H "Authorization: Bearer ${{ secrets.WEBHOOK_SECRET }}" \
             -H "Content-Type: application/json" \
-            -d '{"image":"${{ secrets.DOCKER_IMAGE_NAME }}","tag":"${{ secrets.DOCKER_TAG }}"}' \
+            -d '{
+              "image": "${{ secrets.DOCKER_IMAGE_NAME }}",
+              "tag": "latest",
+              "service": "${{ secrets.SERVICE_NAME }}"
+            }' \
             ${{ secrets.WEBHOOK_URL }}
