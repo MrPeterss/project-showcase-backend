@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  team            Team      @relation(fields: [teamId], references: [id])
+  teamId          Int
+  projectsCreated Project[]
+  createdAt       DateTime  @default(now())
+}
+
+model Team {
+  id        Int       @id @default(autoincrement())
+  name      String
+  members   User[]
+  projects  Project[]
+  port      Int       @unique
+  createdAt DateTime  @default(now())
+}
+
+model Project {
+  id             Int      @id @default(autoincrement())
+  dockerHubImage String
+  deployedAt     DateTime @default(now())
+  isActive       Boolean  @default(false)
+  team           Team     @relation(fields: [teamId], references: [id])
+  teamId         Int
+  deployedBy     User     @relation(fields: [deployedById], references: [id])
+  deployedById   Int
+  createdAt      DateTime @default(now())
+
+  @@unique([teamId, isActive])
+}

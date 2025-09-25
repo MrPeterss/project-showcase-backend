@@ -77,3 +77,4 @@ ehthumbs.db
 *~
 .swp
 .swo
+/src/generated/prisma
