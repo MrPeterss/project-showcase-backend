@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Install prisma CLI globally for database setup
 RUN npm install -g prisma
