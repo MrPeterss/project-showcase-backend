@@ -4,8 +4,6 @@
 
 # npm packages
 /node_modules
-# Lock files
-package-lock.json
 # yarn and pnpm lock files (if used)
 yarn.lock
 pnpm-lock.yaml

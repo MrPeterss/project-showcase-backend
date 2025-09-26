@@ -4,7 +4,6 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Create log array based on environment variables
 const logLevels: Array<'query' | 'error' | 'warn' | 'info'> = [];
 if (process.env.PRISMA_LOG_ERRORS !== 'false') logLevels.push('error');
 if (process.env.PRISMA_LOG_WARNINGS !== 'false') logLevels.push('warn');

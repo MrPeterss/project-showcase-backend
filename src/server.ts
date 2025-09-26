@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { Request, Response } from 'express';
 import userRouter from './users/userRouter.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { requestLogger } from './middleware/logger.js';
@@ -15,7 +16,7 @@ app.use(express.json());
 const router = express.Router();
 router.use(apiLimiter);
 
-router.get('/', (req, res) => {
+router.get('/', (req: Request, res: Response) => {
   res.send('Hello world from Express!');
 });
 
