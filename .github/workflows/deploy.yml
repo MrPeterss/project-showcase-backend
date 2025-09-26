@@ -15,7 +15,7 @@ jobs:
 
       - name: Copy Firebase service account
         run: |
-          cp ${{ env.FIREBASE_SERVICE_ACCOUNT_PATH }} .
+          cp ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PATH }} .
 
       - name: Build Docker image
         run: |
@@ -32,5 +32,5 @@ jobs:
             --name project-showcase-backend \
             --restart unless-stopped \
             -p 8000:8000 \
-            --env-file ${{ env.ENV_FILE_PATH }} \
+            --env-file ${{ secrets.ENV_FILE_PATH }} \
             project-showcase-backend:latest
