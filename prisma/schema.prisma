@@ -3,6 +3,17 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+model ContainerInstance {
+  id         Int      @id @default(autoincrement())
+  project    Project  @relation(fields: [projectId], references: [id])
+  projectId  Int
+  status     String   // e.g., 'running', 'stopped', 'error'
+  containerId String? // Docker container ID
+  url        String?  // Public URL if exposed
+  startedAt  DateTime @default(now())
+  stoppedAt  DateTime?
+}
+
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
@@ -15,6 +26,7 @@ model User {
   teamId          Int
   projectsCreated Project[]
   createdAt       DateTime  @default(now())
+  isAdmin         Boolean   @default(false)
 }
 
 model Team {
@@ -36,6 +48,7 @@ model Project {
   deployedBy     User     @relation(fields: [deployedById], references: [id])
   deployedById   Int
   createdAt      DateTime @default(now())
+  containerInstances ContainerInstance[]
 
   @@unique([teamId, isActive])
 }

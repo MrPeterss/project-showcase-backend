@@ -38,6 +38,7 @@ npm-debug.log*
 /coverage
 *.sqlite
 *.wctf
+/prisma/*.db
 
 
 # ------------------------------------
@@ -48,6 +49,7 @@ npm-debug.log*
 .env
 .env.*
 !.env.example # Keep the example file to show required variables
+firebase-service-account.json
 
 # Local configuration files
 *.local

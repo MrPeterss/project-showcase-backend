@@ -1,36 +1,31 @@
 import express from 'express';
-import { PrismaClient } from './generated/prisma/index.js'; 
-import * as admin from 'firebase-admin';
-import { authenticateFirebase } from './middleware/authMiddleware';
+import admin from 'firebase-admin';
+import userRouter from './users/userRouter';
+import { apiLimiter } from './middleware/rateLimit';
+import adminRouter from './admin/adminRouter';
+import teamRouter from './teams/teamRouter';
+import projectRouter from './projects/projectRouter';
+import containerRouter from './containers/containerRouter';
+import serviceAccount from '../firebase-service-account.json' assert { type: 'json' };
 
 const app = express();
-const prisma = new PrismaClient();
+app.use(express.json());
+app.use('/api', apiLimiter);
 const port = 3000;
-const serviceAccount = require('path/to/your/serviceAccountKey.json');
 
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
 });
 
 app.get('/', (req, res) => {
   res.send('Hello world from Express!');
 });
 
-app.get('/users', async (req, res) => {
-  try {
-    const users = await prisma.user.findMany();
-    res.json(users);
-  } catch (error) {
-    res.status(500).send("Error fetching users");
-  }
-});
-
-app.get('/api/protected/data', authenticateFirebase, (req, res) => {
-  res.json({
-    message: `Hello, ${(req as any).user.email}! This data is protected.`,
-    uid: (req as any).user.uid
-  });
-});
+app.use('/api/admin', adminRouter);
+app.use('/api/users', userRouter);
+app.use('/api/teams', teamRouter);
+app.use('/api/projects', projectRouter);
+app.use('/api/containers', containerRouter);
 
 app.listen(port, () => {
   console.log(`Express app listening at http://localhost:${port}`);

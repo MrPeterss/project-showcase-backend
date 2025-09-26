@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import * as admin from 'firebase-admin';
 
 interface AuthRequest extends Request {
