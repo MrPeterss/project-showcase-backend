@@ -1,12 +1,8 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Deploy Production Backend 
 
-# Controls when the workflow will run
 on:
   push:
     branches: [ "production" ]
-    
   workflow_dispatch:
 
 jobs:
@@ -18,14 +14,14 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ DOCKERHUB_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
       - name: Build and push
         uses: docker/build-push-action@v4
         with:
           push: true
-          tags: ${{ DOCKERHUB_USERNAME }}/${{ secrets.DOCKER_IMAGE_NAME }}:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKER_IMAGE_NAME }}:latest
       
       - name: Trigger deployment webhook
         run: |
@@ -33,7 +29,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.WEBHOOK_SECRET }}" \
             -H "Content-Type: application/json" \
             -d '{
-              "image": "${{ DOCKERHUB_USERNAME }}/${{ secrets.DOCKER_IMAGE_NAME }}",
+              "image": "${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.DOCKER_IMAGE_NAME }}",
               "tag": "latest",
               "service": "${{ secrets.SERVICE_NAME }}"
             }' \
