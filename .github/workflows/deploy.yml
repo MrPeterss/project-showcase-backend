@@ -2,7 +2,7 @@ name: Deploy Production Backend
 
 on:
   push:
-    branches: [ "production" ]
+    branches: ['production']
   workflow_dispatch:
 
 jobs:
@@ -12,6 +12,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Copy Firebase service account
+        run: |
+          cp $FIREBASE_SERVICE_ACCOUNT_PATH .
 
       - name: Build Docker image
         run: |
@@ -28,4 +32,5 @@ jobs:
             --name project-showcase-backend \
             --restart unless-stopped \
             -p 8000:8000 \
+            --env-file $ENV_FILE_PATH \
             project-showcase-backend:latest
