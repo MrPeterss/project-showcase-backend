@@ -7,6 +7,9 @@ WORKDIR /app
 # Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
+# Copy firebase service account
+COPY firebase-service-account.json ./firebase-service-account.json
+
 # Install dependencies
 RUN npm ci
 
