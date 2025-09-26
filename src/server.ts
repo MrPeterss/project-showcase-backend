@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import userRouter from './users/userRouter.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { requestLogger } from './middleware/logger.js';
