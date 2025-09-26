@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { startContainer, stopContainer } from './containerController';
-import { authenticateFirebase } from '../middleware/authMiddleware';
+import { startContainer, stopContainer } from './containerController.js';
+import { authenticateFirebase } from '../middleware/authMiddleware.js';
 
 const router = Router();
 

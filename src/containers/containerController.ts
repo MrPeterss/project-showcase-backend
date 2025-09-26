@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 // import Docker from 'dockerode'; // Uncomment if using dockerode
 
 const prisma = new PrismaClient();

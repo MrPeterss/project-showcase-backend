@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
-import * as admin from 'firebase-admin';
+import firebaseAdmin from '../firebase.js';
+import type { auth } from 'firebase-admin';
 
 interface AuthRequest extends Request {
-  user?: admin.auth.DecodedIdToken;
+  user?: auth.DecodedIdToken;
 }
 
 export const authenticateFirebase = async (
@@ -18,7 +19,7 @@ export const authenticateFirebase = async (
   const idToken = authHeader.split('Bearer ')[1];
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
     req.user = decodedToken;
     next();
   } catch (error) {

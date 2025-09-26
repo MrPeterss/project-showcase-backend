@@ -1,6 +1,6 @@
 import request from 'supertest';
 import express from 'express';
-import * as adminController from './adminController';
+import * as adminController from './adminController.js';
 
 const app = express();
 app.use(express.json());

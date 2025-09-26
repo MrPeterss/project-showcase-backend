@@ -1,21 +1,17 @@
 import express from 'express';
-import admin from 'firebase-admin';
-import userRouter from './users/userRouter';
-import { apiLimiter } from './middleware/rateLimit';
-import adminRouter from './admin/adminRouter';
-import teamRouter from './teams/teamRouter';
-import projectRouter from './projects/projectRouter';
-import containerRouter from './containers/containerRouter';
-import serviceAccount from '../firebase-service-account.json' assert { type: 'json' };
+import firebaseAdmin from './firebase.js';
+import userRouter from './users/userRouter.js';
+import { apiLimiter } from './middleware/rateLimit.js';
+import adminRouter from './admin/adminRouter.js';
+import teamRouter from './teams/teamRouter.js';
+import projectRouter from './projects/projectRouter.js';
+import containerRouter from './containers/containerRouter.js';
 
 const app = express();
 app.use(express.json());
 app.use('/api', apiLimiter);
 const port = 3000;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
-});
 
 app.get('/', (req, res) => {
   res.send('Hello world from Express!');

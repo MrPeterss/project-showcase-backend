@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { listUsers, addUser, deleteUser, requireAdmin } from './adminController';
-import { authenticateFirebase } from '../middleware/authMiddleware';
+import { listUsers, addUser, deleteUser, requireAdmin } from './adminController.js';
+import { authenticateFirebase } from '../middleware/authMiddleware.js';
 
 const router = Router();
 

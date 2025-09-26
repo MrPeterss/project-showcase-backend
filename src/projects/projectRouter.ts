@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { createProject, listProjects } from './projectController';
+import { createProject, listProjects } from './projectController.js';
 import {
 	updateProject,
 	deleteProject,
 	getProject,
 	getProjectLogs,
 	restartProject
-} from './projectLifecycleController';
-import { authenticateFirebase } from '../middleware/authMiddleware';
+} from './projectLifecycleController.js';
+import { authenticateFirebase } from '../middleware/authMiddleware.js';
 
 
 const router = Router();

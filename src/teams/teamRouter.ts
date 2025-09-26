@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { createTeam, joinTeam } from './teamController';
-import { authenticateFirebase } from '../middleware/authMiddleware';
+import { createTeam, joinTeam } from './teamController.js';
+import { authenticateFirebase } from '../middleware/authMiddleware.js';
 
 
 const router = Router();
