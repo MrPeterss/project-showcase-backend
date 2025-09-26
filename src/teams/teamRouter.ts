@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { createTeam, joinTeam } from './teamController.js';
-import { authenticateFirebase } from '../middleware/authMiddleware.js';
-
+import { authenticateFirebase } from '../middleware/authentication.js';
 
 const router = Router();
 router.post('/create', authenticateFirebase, createTeam);

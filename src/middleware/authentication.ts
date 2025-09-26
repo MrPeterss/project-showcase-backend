@@ -9,11 +9,13 @@ interface AuthRequest extends Request {
 export const authenticateFirebase = async (
   req: AuthRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).send({ error: 'Unauthorized: No token provided or wrong format.' });
+    return res
+      .status(401)
+      .send({ error: 'Unauthorized: No token provided or wrong format.' });
   }
 
   const idToken = authHeader.split('Bearer ')[1];
@@ -24,6 +26,8 @@ export const authenticateFirebase = async (
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
-    return res.status(401).send({ error: 'Unauthorized: Invalid or expired token.' });
+    return res
+      .status(401)
+      .send({ error: 'Unauthorized: Invalid or expired token.' });
   }
 };

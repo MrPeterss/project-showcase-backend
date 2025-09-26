@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAllUsers, getProtectedData } from './userController.js';
-import { authenticateFirebase } from '../middleware/authMiddleware.js';
+import { authenticateFirebase } from '../middleware/authentication.js';
 
 const router = Router();
 

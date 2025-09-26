@@ -1,7 +1,5 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import type { Request, Response } from 'express';
+import { prisma } from '../prisma.js';
 
 export const updateProject = async (req: Request, res: Response) => {
   try {
@@ -30,7 +28,9 @@ export const deleteProject = async (req: Request, res: Response) => {
 export const getProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const project = await prisma.project.findUnique({ where: { id: Number(id) } });
+    const project = await prisma.project.findUnique({
+      where: { id: Number(id) },
+    });
     res.json(project);
   } catch (err) {
     res.status(400).json({ error: 'Failed to fetch project', details: err });

@@ -1,12 +1,12 @@
 import rateLimit from 'express-rate-limit';
 
-// 100 requests per 15 minutes per IP
+// Configurable rate limiting per IP
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    error: 'Too many requests, please try again later.'
-  }
+    error: 'Too many requests, please try again later.',
+  },
 });

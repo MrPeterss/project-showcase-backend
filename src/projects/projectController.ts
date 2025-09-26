@@ -1,7 +1,5 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import type { Request, Response } from 'express';
+import { prisma } from '../prisma.js';
 
 export const createProject = async (req: Request, res: Response) => {
   try {

@@ -1,14 +1,17 @@
-import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { Request, Response, NextFunction } from 'express';
+import { prisma } from '../prisma.js';
 
-const prisma = new PrismaClient();
-
-export const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
-  // @ts-ignore
+export const requireAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  // @ts-expect-error - user property is added by Firebase auth middleware
   const userId = req.user?.uid;
   if (!userId) return res.status(401).json({ error: 'No user' });
   const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
-  if (!user || !user.isAdmin) return res.status(403).json({ error: 'Admin only' });
+  if (!user || !user.isAdmin)
+    return res.status(403).json({ error: 'Admin only' });
   next();
 };
 

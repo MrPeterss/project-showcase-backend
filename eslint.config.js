@@ -5,6 +5,11 @@ import tsParser from '@typescript-eslint/parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
+  // 0. Ignore generated files
+  {
+    ignores: ['src/generated/**/*', 'dist/**/*', 'node_modules/**/*'],
+  },
+
   // 1. Base ESLint Recommended Rules
   js.configs.recommended,
 
@@ -15,7 +20,7 @@ export default [
       '@typescript-eslint': ts,
     },
     languageOptions: {
-      parser: tsParser, // <-- MOVED HERE
+      parser: tsParser,
       globals: {
         ...globals.node,
       },

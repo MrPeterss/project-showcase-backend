@@ -1,8 +1,6 @@
-import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { Request, Response } from 'express';
+import { prisma } from '../prisma.js';
 // import Docker from 'dockerode'; // Uncomment if using dockerode
-
-const prisma = new PrismaClient();
 // const docker = new Docker();
 
 export const startContainer = async (req: Request, res: Response) => {
