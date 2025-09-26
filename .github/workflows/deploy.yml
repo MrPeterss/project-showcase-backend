@@ -15,7 +15,7 @@ jobs:
 
       - name: Copy Firebase service account
         run: |
-          cp ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PATH }} .
+          cp ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PATH }} ./firebase-service-account.json
 
       - name: Build Docker image
         run: |
