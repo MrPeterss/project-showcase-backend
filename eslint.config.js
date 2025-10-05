@@ -54,9 +54,6 @@ export default [
 
       // Prefer const over let
       'prefer-const': 'error',
-
-      // No console in production code (can be overridden)
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
 

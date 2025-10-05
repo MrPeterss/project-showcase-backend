@@ -1,30 +1,33 @@
 import 'dotenv/config';
+import helmet from 'helmet';
+
 import express from 'express';
 import type { Request, Response } from 'express';
-import userRouter from './users/userRouter.js';
-import { apiLimiter } from './middleware/rateLimit.js';
-import { requestLogger } from './middleware/logger.js';
+
 import adminRouter from './admin/adminRouter.js';
-import teamRouter from './teams/teamRouter.js';
-import projectRouter from './projects/projectRouter.js';
-import containerRouter from './containers/containerRouter.js';
+import { authenticateFirebase } from './middleware/authentication.js';
+import { requestLogger } from './middleware/logger.js';
+import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
+import userRouter from './users/userRouter.js';
 
 const app = express();
 app.use(requestLogger);
+app.use(helmet());
 app.use(express.json());
 
 const router = express.Router();
 router.use(apiLimiter);
 
-router.get('/', (req: Request, res: Response) => {
+// Public routes (no authentication required)
+router.get('/', (_: Request, res: Response) => {
   res.send('Hello world from Express!');
 });
 
+// Protected routes (require authentication)
+router.use(authenticateFirebase);
+router.use(userLimiter);
 router.use('/admin', adminRouter);
 router.use('/users', userRouter);
-router.use('/teams', teamRouter);
-router.use('/projects', projectRouter);
-router.use('/containers', containerRouter);
 
 app.use(router);
 
