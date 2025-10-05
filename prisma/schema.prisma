@@ -2,52 +2,76 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model ContainerInstance {
-  id         Int      @id @default(autoincrement())
-  project    Project  @relation(fields: [projectId], references: [id])
-  projectId  Int
-  status     String   // e.g., 'running', 'stopped', 'error'
-  containerId String? // Docker container ID
-  url        String?  // Public URL if exposed
-  startedAt  DateTime @default(now())
-  stoppedAt  DateTime?
-}
-
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
 
-model User {
+enum Role {
+  ADMIN,
+  INSTRUCTOR,
+  STUDENT
+}
+
+model Semester {
   id              Int       @id @default(autoincrement())
-  email           String    @unique
-  team            Team      @relation(fields: [teamId], references: [id])
-  teamId          Int
-  projectsCreated Project[]
-  createdAt       DateTime  @default(now())
-  isAdmin         Boolean   @default(false)
+  shortName String
+  startDate DateTime
+  endDate DateTime
+  courses Course[]
+}
+
+model Course {
+  id              Int       @id @default(autoincrement())
+  department String
+  number Int
+  name String
+  projectTypes ProjectType[]
+  semester Semester @relation(fields: [semesterId], references: [id])
+  semesterId Int
+}
+
+model ProjectType {
+  id              Int       @id @default(autoincrement())
+  name String
+  content Bytes
+  course Course @relation(fields: [courseId], references: [id])
+  courseId Int
 }
 
 model Team {
   id        Int       @id @default(autoincrement())
   name      String
+  port      Int       @unique
+  course Course @relation(fields: [courseId], references: [id])
+  courseId Int
   members   User[]
   projects  Project[]
-  port      Int       @unique
   createdAt DateTime  @default(now())
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  firebaseId String @unique
+  team            Team      @relation(fields: [teamId], references: [id])
+  teamId          Int
+  projectsCreated Project[]
+  createdAt       DateTime  @default(now())
+  role         Role
 }
 
 model Project {
   id             Int      @id @default(autoincrement())
-  dockerHubImage String
-  deployedAt     DateTime @default(now())
-  isActive       Boolean  @default(false)
   team           Team     @relation(fields: [teamId], references: [id])
   teamId         Int
   deployedBy     User     @relation(fields: [deployedById], references: [id])
   deployedById   Int
-  createdAt      DateTime @default(now())
-  containerInstances ContainerInstance[]
+  status     String   // e.g., 'running', 'stopped', 'error'.   FIX with ENUM
+  containerId String? // Docker container ID
+  gitHubLink String
+  deployedAt     DateTime @default(now())
+  stoppedAt  DateTime?
 
-  @@unique([teamId, isActive])
+  @@unique([teamId, status]) // Fix
 }

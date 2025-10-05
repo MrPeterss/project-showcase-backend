@@ -28,13 +28,7 @@ Edit your `.env` file with the following variables:
 | `PRISMA_LOG_ERRORS`             | Enable error logging                  | `true`                            | `true`, `false`                            |
 | `PRISMA_LOG_WARNINGS`           | Enable warning logging                | `true`                            | `true`, `false`                            |
 
-### 3. Environment Templates
-
-- `.env.example` - Development environment template
-- `.env.production.example` - Production environment template
-- `.env.test.example` - Test environment template
-
-### 4. Running in Different Environments
+### 3. Running in Different Environments
 
 ```bash
 # Development

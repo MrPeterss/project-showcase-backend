@@ -43,7 +43,7 @@ npm-debug.log*
 # Environment Variables & Secrets
 # ------------------------------------
 
-# Environment variables file (VERY IMPORTANT for secrets)
+# Environment variables file
 .env
 !.env.example # Keep the example file to show required variables
 firebase-service-account.json
