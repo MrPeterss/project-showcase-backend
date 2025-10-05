@@ -10,12 +10,13 @@ export const authenticateFirebase = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res
+    res
       .status(401)
       .send({ error: 'Unauthorized: No token provided or wrong format.' });
+    return;
   }
 
   const idToken = authHeader.split('Bearer ')[1];
@@ -26,7 +27,7 @@ export const authenticateFirebase = async (
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
-    return res
+    res
       .status(401)
       .send({ error: 'Unauthorized: Invalid or expired token.' });
   }

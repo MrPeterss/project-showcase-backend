@@ -26,25 +26,36 @@ const getStatusColor = (status: number): string => {
 // Get color based on HTTP method
 const getMethodColor = (method: string): string => {
   switch (method) {
-    case 'GET': return colors.green;
-    case 'POST': return colors.yellow;
-    case 'PUT': return colors.blue;
-    case 'PATCH': return colors.magenta;
-    case 'DELETE': return colors.red;
-    default: return colors.white;
+    case 'GET':
+      return colors.green;
+    case 'POST':
+      return colors.yellow;
+    case 'PUT':
+      return colors.blue;
+    case 'PATCH':
+      return colors.magenta;
+    case 'DELETE':
+      return colors.red;
+    default:
+      return colors.white;
   }
 };
 
 // Format response time with appropriate color
 const formatResponseTime = (time: number): string => {
-  const color = time > 1000 ? colors.red : time > 500 ? colors.yellow : colors.green;
+  const color =
+    time > 1000 ? colors.red : time > 500 ? colors.yellow : colors.green;
   return `${color}${time}ms${colors.reset}`;
 };
 
-export const logger = (req: Request, res: Response, next: NextFunction): void => {
+export const logger = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
-  
+
   // Listen for when the response finishes
   res.on('finish', () => {
     const endTime = Date.now();
@@ -53,20 +64,20 @@ export const logger = (req: Request, res: Response, next: NextFunction): void =>
     const methodColor = getMethodColor(req.method);
     const userAgent = req.get('User-Agent') || 'Unknown';
     const contentLength = res.get('Content-Length') || '0';
-    
+
     // Log format: [timestamp] METHOD /path STATUS - response_time content_length IP "user-agent"
     console.log(
       `${colors.gray}[${timestamp}]${colors.reset} ` +
-      `${methodColor}${req.method}${colors.reset} ` +
-      `${colors.bright}${req.originalUrl || req.url}${colors.reset} ` +
-      `${statusColor}${res.statusCode}${colors.reset} - ` +
-      `${formatResponseTime(responseTime)} ` +
-      `${colors.cyan}${contentLength}b${colors.reset} ` +
-      `${colors.gray}${req.ip || req.connection.remoteAddress}${colors.reset} ` +
-      `${colors.gray}"${userAgent}"${colors.reset}`
+        `${methodColor}${req.method}${colors.reset} ` +
+        `${colors.bright}${req.originalUrl || req.url}${colors.reset} ` +
+        `${statusColor}${res.statusCode}${colors.reset} - ` +
+        `${formatResponseTime(responseTime)} ` +
+        `${colors.cyan}${contentLength}b${colors.reset} ` +
+        `${colors.gray}${req.ip || req.connection.remoteAddress}${colors.reset} ` +
+        `${colors.gray}"${userAgent}"${colors.reset}`,
     );
   });
-  
+
   // Handle connection errors
   res.on('close', () => {
     if (!res.writableEnded) {
@@ -74,38 +85,42 @@ export const logger = (req: Request, res: Response, next: NextFunction): void =>
       const responseTime = endTime - startTime;
       console.log(
         `${colors.gray}[${timestamp}]${colors.reset} ` +
-        `${colors.red}${req.method}${colors.reset} ` +
-        `${colors.bright}${req.originalUrl || req.url}${colors.reset} ` +
-        `${colors.red}CONNECTION_CLOSED${colors.reset} - ` +
-        `${formatResponseTime(responseTime)} ` +
-        `${colors.gray}${req.ip || req.connection.remoteAddress}${colors.reset}`
+          `${colors.red}${req.method}${colors.reset} ` +
+          `${colors.bright}${req.originalUrl || req.url}${colors.reset} ` +
+          `${colors.red}CONNECTION_CLOSED${colors.reset} - ` +
+          `${formatResponseTime(responseTime)} ` +
+          `${colors.gray}${req.ip || req.connection.remoteAddress}${colors.reset}`,
       );
     }
   });
-  
+
   next();
 };
 
 // Simple version without colors for production
-export const simpleLogger = (req: Request, res: Response, next: NextFunction): void => {
+export const simpleLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
-  
+
   // Listen for when the response finishes
   res.on('finish', () => {
     const endTime = Date.now();
     const responseTime = endTime - startTime;
     const userAgent = req.get('User-Agent') || 'Unknown';
     const contentLength = res.get('Content-Length') || '0';
-    
+
     // Simple log format for production
     console.log(
       `[${timestamp}] ${req.method} ${req.originalUrl || req.url} ` +
-      `${res.statusCode} - ${responseTime}ms ${contentLength}b ` +
-      `${req.ip || req.connection.remoteAddress} "${userAgent}"`
+        `${res.statusCode} - ${responseTime}ms ${contentLength}b ` +
+        `${req.ip || req.connection.remoteAddress} "${userAgent}"`,
     );
   });
-  
+
   // Handle connection errors
   res.on('close', () => {
     if (!res.writableEnded) {
@@ -113,14 +128,15 @@ export const simpleLogger = (req: Request, res: Response, next: NextFunction): v
       const responseTime = endTime - startTime;
       console.log(
         `[${timestamp}] ${req.method} ${req.originalUrl || req.url} ` +
-        `CONNECTION_CLOSED - ${responseTime}ms ` +
-        `${req.ip || req.connection.remoteAddress}`
+          `CONNECTION_CLOSED - ${responseTime}ms ` +
+          `${req.ip || req.connection.remoteAddress}`,
       );
     }
   });
-  
+
   next();
 };
 
 // Export the appropriate logger based on environment
-export const requestLogger = process.env.NODE_ENV === 'production' ? simpleLogger : logger;
+export const requestLogger =
+  process.env.NODE_ENV === 'production' ? simpleLogger : logger;

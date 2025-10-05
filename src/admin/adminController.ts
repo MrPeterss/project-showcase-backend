@@ -5,13 +5,18 @@ export const requireAdmin = async (
   req: Request,
   res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   // @ts-expect-error - user property is added by Firebase auth middleware
   const userId = req.user?.uid;
-  if (!userId) return res.status(401).json({ error: 'No user' });
+  if (!userId) {
+    res.status(401).json({ error: 'No user' });
+    return;
+  }
   const user = await prisma.user.findUnique({ where: { id: Number(userId) } });
-  if (!user || !user.isAdmin)
-    return res.status(403).json({ error: 'Admin only' });
+  if (!user || user.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Admin only' });
+    return;
+  }
   next();
 };
 
@@ -22,9 +27,9 @@ export const listUsers = async (req: Request, res: Response) => {
 
 export const addUser = async (req: Request, res: Response) => {
   try {
-    const { email, teamId, isAdmin } = req.body;
+    const { email, teamId, role } = req.body;
     const user = await prisma.user.create({
-      data: { email, teamId, isAdmin: !!isAdmin },
+      data: { email, teamId, role: role || 'STUDENT' },
     });
     res.status(201).json(user);
   } catch (err) {

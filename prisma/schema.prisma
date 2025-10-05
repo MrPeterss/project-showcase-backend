@@ -4,12 +4,12 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 enum Role {
-  ADMIN,
-  INSTRUCTOR,
+  ADMIN
+  INSTRUCTOR
   STUDENT
 }
 
@@ -27,6 +27,7 @@ model Course {
   number Int
   name String
   projectTypes ProjectType[]
+  teams Team[]
   semester Semester @relation(fields: [semesterId], references: [id])
   semesterId Int
 }
@@ -53,12 +54,12 @@ model Team {
 model User {
   id              Int       @id @default(autoincrement())
   email           String    @unique
-  firebaseId String @unique
-  team            Team      @relation(fields: [teamId], references: [id])
-  teamId          Int
+  firebaseId      String?   @unique
+  team            Team?     @relation(fields: [teamId], references: [id])
+  teamId          Int?
   projectsCreated Project[]
   createdAt       DateTime  @default(now())
-  role         Role
+  role            Role      @default(STUDENT)
 }
 
 model Project {

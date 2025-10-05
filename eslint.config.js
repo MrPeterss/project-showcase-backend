@@ -5,17 +5,22 @@ import tsParser from '@typescript-eslint/parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
-  // 0. Ignore generated files
+  // Ignore generated and build files
   {
-    ignores: ['src/generated/**/*', 'dist/**/*', 'node_modules/**/*'],
+    ignores: [
+      'src/generated/**/*',
+      'dist/**/*',
+      '*.config.js',
+      'node_modules/**/*',
+    ],
   },
 
-  // 1. Base ESLint Recommended Rules
+  // Base ESLint Recommended Rules
   js.configs.recommended,
 
-  // 2. TypeScript-specific Setup
+  // TypeScript-specific Setup
   {
-    files: ['**/*.ts'], // Target only TypeScript files
+    files: ['**/*.ts'],
     plugins: {
       '@typescript-eslint': ts,
     },
@@ -31,23 +36,30 @@ export default [
       },
     },
     rules: {
-      // 3. Apply TypeScript Recommended Rules
+      // Apply TypeScript Recommended Rules
       ...ts.configs.recommended.rules,
 
-      // 4. Custom/Stricter Rules (optional, but good practice)
-      // e.g., enforce using type imports for clarity
+      // Custom Rules
       '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
 
       // Disable the base rule that conflicts with TS version
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
-        { argsIgnorePattern: '^_' },
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+
+      // Prefer const over let
+      'prefer-const': 'error',
+
+      // No console in production code (can be overridden)
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
 
-  // 5. Prettier Integration (must be last to override)
-  // This turns off all ESLint rules that conflict with Prettier.
+  // Prettier Integration (must be last to override)
   eslintConfigPrettier,
 ];

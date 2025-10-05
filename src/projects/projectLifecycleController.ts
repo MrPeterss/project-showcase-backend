@@ -4,10 +4,10 @@ import { prisma } from '../prisma.js';
 export const updateProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { dockerHubImage, isActive } = req.body;
+    const { gitHubLink, status, containerId } = req.body;
     const project = await prisma.project.update({
       where: { id: Number(id) },
-      data: { dockerHubImage, isActive },
+      data: { gitHubLink, status, containerId },
     });
     res.json(project);
   } catch (err) {

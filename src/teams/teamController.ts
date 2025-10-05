@@ -3,9 +3,9 @@ import { prisma } from '../prisma.js';
 
 export const createTeam = async (req: Request, res: Response) => {
   try {
-    const { name, port } = req.body;
+    const { name, port, courseId } = req.body;
     const team = await prisma.team.create({
-      data: { name, port },
+      data: { name, port, courseId },
     });
     res.status(201).json(team);
   } catch (err) {

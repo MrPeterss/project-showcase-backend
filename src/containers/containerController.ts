@@ -5,15 +5,14 @@ import { prisma } from '../prisma.js';
 
 export const startContainer = async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.body;
+    const { projectId, containerId } = req.body;
     // Here you would use Dockerode or similar to start the container
-    // For now, just create a ContainerInstance record
-    const instance = await prisma.containerInstance.create({
+    // Update the project with container info
+    const instance = await prisma.project.update({
+      where: { id: projectId },
       data: {
-        projectId,
         status: 'running',
-        // containerId: dockerId,
-        // url: publicUrl,
+        containerId,
       },
     });
     res.status(201).json(instance);
@@ -24,10 +23,10 @@ export const startContainer = async (req: Request, res: Response) => {
 
 export const stopContainer = async (req: Request, res: Response) => {
   try {
-    const { instanceId } = req.body;
+    const { projectId } = req.body;
     // Here you would use Dockerode or similar to stop the container
-    const instance = await prisma.containerInstance.update({
-      where: { id: instanceId },
+    const instance = await prisma.project.update({
+      where: { id: projectId },
       data: {
         status: 'stopped',
         stoppedAt: new Date(),

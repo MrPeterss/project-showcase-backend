@@ -3,13 +3,13 @@ import { prisma } from '../prisma.js';
 
 export const createProject = async (req: Request, res: Response) => {
   try {
-    const { dockerHubImage, teamId, deployedById } = req.body;
+    const { gitHubLink, teamId, deployedById, status } = req.body;
     const project = await prisma.project.create({
       data: {
-        dockerHubImage,
+        gitHubLink,
         teamId,
         deployedById,
-        isActive: false,
+        status: status || 'stopped',
       },
     });
     res.status(201).json(project);
