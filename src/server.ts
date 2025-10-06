@@ -18,9 +18,14 @@ app.use(express.json());
 const router = express.Router();
 router.use(apiLimiter);
 
-// Public routes (no authentication required)
-router.get('/', (_: Request, res: Response) => {
-  res.send('Hello world from Express!');
+// Health check endpoint
+router.get('/health', (_: Request, res: Response) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+  });
 });
 
 // Protected routes (require authentication)
