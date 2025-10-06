@@ -26,6 +26,9 @@ COPY src ./src/
 # Build the TypeScript application
 RUN npm run build
 
+# Compile seed file
+RUN npx tsc prisma/seed.ts --outDir dist/prisma --moduleResolution node --module esnext --esModuleInterop
+
 # Production stage
 FROM node:24-slim
 
@@ -56,4 +59,4 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/data
 
 # Start the application with migrations and seeding
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run seed && npm start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js && npm start"]
