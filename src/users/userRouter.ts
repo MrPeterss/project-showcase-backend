@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { getAllUsers, getProtectedData } from './userController.js';
-import { authenticateFirebase } from '../middleware/authentication.js';
+
+import { requireAdmin } from '../middleware/authentication.js';
+import { getAllUsers } from './userController.js';
 
 const router = Router();
 
-router.get('/', getAllUsers);
-router.get('/protected-data', authenticateFirebase, getProtectedData);
+router.get('/', requireAdmin, getAllUsers);
 
 export default router;

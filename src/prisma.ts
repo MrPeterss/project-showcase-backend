@@ -7,7 +7,10 @@ const globalForPrisma = globalThis as unknown as {
 const logLevels: Array<'query' | 'error' | 'warn' | 'info'> = [];
 if (process.env.PRISMA_LOG_ERRORS !== 'false') logLevels.push('error');
 if (process.env.PRISMA_LOG_WARNINGS !== 'false') logLevels.push('warn');
-if (process.env.PRISMA_LOG_QUERIES === 'true' && process.env.NODE_ENV === 'development') {
+if (
+  process.env.PRISMA_LOG_QUERIES === 'true' &&
+  process.env.NODE_ENV === 'development'
+) {
   logLevels.push('query');
 }
 

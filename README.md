@@ -18,6 +18,7 @@ Edit your `.env` file with the following variables:
 
 | Variable                        | Description                           | Default                           | Example                                    |
 | ------------------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------ |
+| `ADMIN_EMAILS`                  | Comma-separated admin emails          | (empty)                           | `admin1@example.com,admin2@example.com`    |
 | `PORT`                          | Server port                           | `3000`                            | `3000`                                     |
 | `NODE_ENV`                      | Environment mode                      | `development`                     | `development`, `production`, `test`        |
 | `DATABASE_URL`                  | Database connection string            | `file:./dev.db`                   | `postgresql://user:pass@localhost:5432/db` |
@@ -28,11 +29,22 @@ Edit your `.env` file with the following variables:
 | `PRISMA_LOG_ERRORS`             | Enable error logging                  | `true`                            | `true`, `false`                            |
 | `PRISMA_LOG_WARNINGS`           | Enable warning logging                | `true`                            | `true`, `false`                            |
 
-### 3. Environment Templates
+### 3. Seed Admin Users
 
-- `.env.example` - Development environment template
-- `.env.production.example` - Production environment template
-- `.env.test.example` - Test environment template
+Add admin emails to your `.env` file and run the seed script:
+
+```bash
+# Add to .env:
+# ADMIN_EMAILS=admin1@example.com,admin2@example.com
+
+# Run seed script
+npm run seed
+
+# Check seeded users
+npm run check-users
+```
+
+See [SEEDING.md](./SEEDING.md) for detailed information about admin user seeding.
 
 ### 4. Running in Different Environments
 
@@ -47,3 +59,43 @@ npm start
 # Test environment
 npm run test
 ```
+
+## Docker Deployment
+
+This application includes Docker support with automatic database migrations and admin user seeding on startup.
+
+### Quick Start with Docker
+
+```bash
+# Build the image
+docker build -t project-showcase-backend .
+
+# Run the container
+docker run -d \
+  --name showcase-backend \
+  -p 8000:8000 \
+  -e ADMIN_EMAILS="admin1@example.com,admin2@example.com" \
+  -e DATABASE_URL="file:/app/data/dev.db" \
+  -e NODE_ENV="production" \
+  -v $(pwd)/data:/app/data \
+  project-showcase-backend
+
+# View logs
+docker logs -f showcase-backend
+```
+
+### What Happens on Container Startup
+
+The Dockerfile CMD runs three commands sequentially:
+
+1. **`npx prisma migrate deploy`** - Database migrations run automatically
+2. **`npm run seed`** - Admin users are seeded from `ADMIN_EMAILS`
+3. **`npm start`** - Server starts and accepts connections
+
+See [DOCKER.md](./DOCKER.md) for complete Docker deployment documentation.
+
+## Documentation
+
+- [SEEDING.md](./SEEDING.md) - Admin user seeding guide
+- [DOCKER.md](./DOCKER.md) - Docker deployment guide
+- [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) - Technical details

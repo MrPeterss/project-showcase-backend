@@ -1,4 +1,7 @@
+import type { Response } from 'express';
 import rateLimit from 'express-rate-limit';
+
+import type { AuthenticatedRequest } from './authentication.js';
 
 // Configurable rate limiting per IP
 export const apiLimiter = rateLimit({
@@ -8,5 +11,29 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     error: 'Too many requests, please try again later.',
+  },
+});
+
+// Rate limiting per authenticated user account
+// This should be used after authentication middleware
+export const userLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '200', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  // Use user ID as the key instead of IP
+  keyGenerator: (req: AuthenticatedRequest): string => {
+    return `${req.user!.id}`;
+  },
+  // Custom handler to provide user-specific error message
+  handler: (req: AuthenticatedRequest, res: Response): void => {
+    res.status(429).json({
+      error: 'Too many requests from your account, please try again later.',
+      userId: req.user!.id,
+    });
+  },
+  skip: (req: AuthenticatedRequest): boolean => {
+    // Skip rate limiting for admin users
+    return req.user!.role === 'ADMIN';
   },
 });

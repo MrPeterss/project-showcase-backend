@@ -8,10 +8,11 @@
     "build": "tsc",
     "start": "NODE_ENV=production node dist/server.js",
     "start:dev": "NODE_ENV=development node dist/server.js",
-    "dev": "NODE_ENV=development nodemon --exec \"tsx src/server.ts\"",
-    "test": "NODE_ENV=test nodemon --exec \"tsx src/server.ts\"",
-    "lint": "eslint \"{src,test}/**/*.ts\" --fix",
-    "format": "prettier --write \"{src,test}/**/*.ts\""
+    "dev": "NODE_ENV=development nodemon -x tsx src/server.ts",
+    "test": "NODE_ENV=test nodemon -x tsx src/server.ts",
+    "lint": "eslint '{src,test}/**/*.ts' --fix",
+    "format": "prettier --write '{src,test}/**/*.ts'",
+    "seed": "tsx prisma/seed.ts"
   },
   "repository": {
     "type": "git",
@@ -29,10 +30,12 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
-    "firebase-admin": "^13.5.0"
+    "firebase-admin": "^13.5.0",
+    "helmet": "^8.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
+    "@trivago/prettier-plugin-sort-imports": "^5.2.2",
     "@types/express": "^5.0.3",
     "@types/node": "^24.5.2",
     "@typescript-eslint/eslint-plugin": "^8.44.1",

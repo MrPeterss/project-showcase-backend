@@ -17,10 +17,8 @@ pnpm-lock.yaml
 /dist
 /build
 
-# TypeScript, Babel, or other compiled files
-/ts-output/
-/*.js.map
-*.d.ts
+# TypeScript compiled files
+*.tsbuildinfo
 
 
 # ------------------------------------
@@ -28,28 +26,49 @@ pnpm-lock.yaml
 # ------------------------------------
 
 # Logs and debug files
+logs/
+*.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 .npm/
 .node_repl_history
 
-# Node.js process dump files
+# Test coverage
 /coverage
+.nyc_output
+
+# Database files
 *.sqlite
-*.wctf
+*.db
 /prisma/*.db
+/prisma/*.db-journal
 
 
 # ------------------------------------
 # Environment Variables & Secrets
 # ------------------------------------
 
-# Environment variables file (VERY IMPORTANT for secrets)
+# Environment variables file
 .env
-!.env.example # Keep the example file to show required variables
+.env.local
+.env.*.local
+!.env.example
+
+# Firebase service account (sensitive)
 firebase-service-account.json
 
-# Local configuration files
-*.local
+
+# ------------------------------------
+# Temporary and Cache Files
+# ------------------------------------
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
 
 
 # ------------------------------------
@@ -58,22 +77,30 @@ firebase-service-account.json
 
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # Windows
 Thumbs.db
 ehthumbs.db
+Desktop.ini
 
 # VS Code
 .vscode/
-
-# Atom
-.atom/
+*.code-workspace
 
 # JetBrains IDEs (WebStorm, IntelliJ)
 .idea/
+*.iml
 
 # Vim
 *~
-.swp
-.swo
-/src/generated/prisma
+*.swp
+*.swo
+
+
+# ------------------------------------
+# Generated Files
+# ------------------------------------
+
+/src/generated/
