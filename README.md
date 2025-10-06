@@ -39,12 +39,7 @@ Add admin emails to your `.env` file and run the seed script:
 
 # Run seed script
 npm run seed
-
-# Check seeded users
-npm run check-users
 ```
-
-See [SEEDING.md](./SEEDING.md) for detailed information about admin user seeding.
 
 ### 4. Running in Different Environments
 
@@ -91,11 +86,3 @@ The Dockerfile CMD runs three commands sequentially:
 1. **`npx prisma migrate deploy`** - Database migrations run automatically
 2. **`npm run seed`** - Admin users are seeded from `ADMIN_EMAILS`
 3. **`npm start`** - Server starts and accepts connections
-
-See [DOCKER.md](./DOCKER.md) for complete Docker deployment documentation.
-
-## Documentation
-
-- [SEEDING.md](./SEEDING.md) - Admin user seeding guide
-- [DOCKER.md](./DOCKER.md) - Docker deployment guide
-- [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) - Technical details
