@@ -1,8 +1,6 @@
 # Use Node.js 24 image as base
 FROM node:24-slim AS builder
 
-ENV DATABASE_URL=${DATABASE_URL}
-
 # Set working directory inside the container
 WORKDIR /app
 
@@ -28,10 +26,6 @@ RUN npm run build
 # Production stage
 FROM node:24-slim
 
-# Build argument for DATABASE_URL (only used during build, not stored in image)
-ARG DATABASE_URL="file:./prisma/sqlite.db"
-ENV DATABASE_URL=${DATABASE_URL}
-
 # Install openssl for Prisma
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
@@ -51,9 +45,6 @@ RUN npx prisma generate
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
-
-# Copy firebase service account (ensure this file exists)
-COPY firebase-service-account.json ./
 
 # Create directory for SQLite database
 RUN mkdir -p /app/data
