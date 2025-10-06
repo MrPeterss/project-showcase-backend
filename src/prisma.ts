@@ -18,8 +18,18 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: logLevels,
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
+    errorFormat: process.env.NODE_ENV === 'development' ? 'pretty' : 'minimal',
   });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
+
+prisma.$on('error' as never, (e: unknown) => {
+  console.error('Prisma Client Error:', e);
+});

@@ -1,10 +1,20 @@
 import { Router } from 'express';
 
 import { requireAdmin } from '../middleware/authentication.js';
-import { listUsers } from './adminController.js';
 
 const router = Router();
 
-router.get('/users', requireAdmin, listUsers);
+// TODO: FINISH ROUTES
+router.get('/stats', requireAdmin, (_req, res) => {
+  res.json({ message: 'Admin stats endpoint' });
+});
+
+router.get('/settings', requireAdmin, (_req, res) => {
+  res.json({ message: 'Admin settings endpoint' });
+});
+
+router.get('/audit-logs', requireAdmin, (_req, res) => {
+  res.json({ message: 'Admin audit logs endpoint' });
+});
 
 export default router;
