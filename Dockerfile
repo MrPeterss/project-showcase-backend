@@ -4,6 +4,9 @@ FROM node:24-slim AS builder
 # Set working directory inside the container
 WORKDIR /app
 
+# Set DATABASE_URL for Prisma (temporary for build, will be overridden at runtime)
+ENV DATABASE_URL="file:/app/data/sqlite.db"
+
 # Copy package files for better layer caching
 COPY package*.json ./
 
@@ -30,6 +33,9 @@ FROM node:24-slim
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Set DATABASE_URL for Prisma (will be overridden by .env file at runtime)
+ENV DATABASE_URL="file:/app/data/sqlite.db"
 
 # Copy package files
 COPY package*.json ./
