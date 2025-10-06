@@ -27,7 +27,7 @@ COPY src ./src/
 RUN npm run build
 
 # Compile seed file
-RUN npx tsc prisma/seed.ts --outDir dist/prisma --moduleResolution node --module esnext --esModuleInterop
+RUN npx tsc prisma/seed.ts --outDir dist/prisma --target ES2020 --moduleResolution node --module esnext --esModuleInterop
 
 # Production stage
 FROM node:24-slim
