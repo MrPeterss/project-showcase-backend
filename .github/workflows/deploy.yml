@@ -19,7 +19,9 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t project-showcase-backend:latest .
+          docker build \
+            --env-file ${{ secrets.ENV_FILE_PATH }} \
+            -t project-showcase-backend:latest .
 
       - name: Deploy new container
         run: |

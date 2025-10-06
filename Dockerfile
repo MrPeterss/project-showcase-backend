@@ -1,6 +1,8 @@
 # Use Node.js 24 image as base
 FROM node:24-slim AS builder
 
+ENV DATABASE_URL=${DATABASE_URL}
+
 # Set working directory inside the container
 WORKDIR /app
 
@@ -25,6 +27,10 @@ RUN npm run build
 
 # Production stage
 FROM node:24-slim
+
+# Build argument for DATABASE_URL (only used during build, not stored in image)
+ARG DATABASE_URL="file:./prisma/sqlite.db"
+ENV DATABASE_URL=${DATABASE_URL}
 
 # Install openssl for Prisma
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
