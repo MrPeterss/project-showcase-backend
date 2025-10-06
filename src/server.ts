@@ -2,15 +2,17 @@ import 'dotenv/config';
 import helmet from 'helmet';
 
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
-import { prisma } from './prisma.js';
 
 import adminRouter from './admin/adminRouter.js';
-import teamRouter from './teams/teamRouter.js';
+import authRouter from './auth/authRouter.js';
 import courseRouter from './courses/courseRouter.js';
 import { authenticateFirebase } from './middleware/authentication.js';
 import { requestLogger } from './middleware/logger.js';
 import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
+import { prisma } from './prisma.js';
+import teamRouter from './teams/teamRouter.js';
 
 const app = express();
 
@@ -20,6 +22,7 @@ app.set('trust proxy', 1);
 app.use(requestLogger);
 app.use(helmet());
 app.use(express.json({ limit: '10kb' }));
+app.use(cookieParser());
 
 const router = express.Router();
 router.use(apiLimiter);
@@ -31,7 +34,7 @@ router.get('/health', async (_: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development',
-    database: 'unknown'
+    database: 'unknown',
   };
 
   try {
@@ -46,6 +49,9 @@ router.get('/health', async (_: Request, res: Response) => {
   }
 });
 
+// Public authentication routes
+router.use('/auth', authRouter);
+
 // Protected routes (require authentication)
 router.use(authenticateFirebase);
 router.use(userLimiter);
@@ -55,17 +61,18 @@ router.use('/courses', courseRouter);
 
 app.use((err: Error, _req: Request, res: Response, _: NextFunction) => {
   console.error('Error:', err);
-  
+
   const statusCode = (err as { statusCode?: number }).statusCode || 500;
-  const message = process.env.NODE_ENV === 'production' 
-    ? 'Internal server error' 
-    : err.message;
+  const message =
+    process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message;
 
   res.status(statusCode).json({
     error: {
       message,
-      ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
-    }
+      ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    },
   });
 });
 
@@ -90,17 +97,17 @@ const server = app.listen(port, async () => {
 // Graceful shutdown
 const gracefulShutdown = async () => {
   console.log('Shutting down gracefully...');
-  
+
   server.close(async () => {
     console.log('HTTP server closed');
-    
+
     // Disconnect from database
     await prisma.$disconnect();
     console.log('Database disconnected');
-    
+
     process.exit(0);
   });
-  
+
   // Force shutdown after 10 seconds
   setTimeout(() => {
     console.error('Forcing shutdown after timeout');

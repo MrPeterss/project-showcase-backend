@@ -24,8 +24,7 @@ export const prisma =
       },
     },
     errorFormat: process.env.NODE_ENV === 'development' ? 'pretty' : 'minimal',
-    },
-  );
+  });
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
