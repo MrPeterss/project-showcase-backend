@@ -1,18 +1,19 @@
+import cookieParser from 'cookie-parser';
 import 'dotenv/config';
 import helmet from 'helmet';
 
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
 
 import adminRouter from './admin/adminRouter.js';
 import authRouter from './auth/authRouter.js';
 import courseRouter from './courses/courseRouter.js';
-import { authenticateFirebase } from './middleware/authentication.js';
+import { requireAuth } from './middleware/authentication.js';
 import { requestLogger } from './middleware/logger.js';
 import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
 import teamRouter from './teams/teamRouter.js';
+import userRouter from './users/userRouter.js';
 
 const app = express();
 
@@ -53,9 +54,10 @@ router.get('/health', async (_: Request, res: Response) => {
 router.use('/auth', authRouter);
 
 // Protected routes (require authentication)
-router.use(authenticateFirebase);
+router.use(requireAuth);
 router.use(userLimiter);
 router.use('/admin', adminRouter);
+router.use('/users', userRouter);
 router.use('/teams', teamRouter);
 router.use('/courses', courseRouter);
 

@@ -1,7 +1,7 @@
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 
-import type { AuthenticatedRequest } from './authentication.js';
+// TODO: Switch to bucket-based rate limiting for distributed environments
 
 // Configurable rate limiting per IP
 export const apiLimiter = rateLimit({
@@ -22,17 +22,17 @@ export const userLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Use user ID as the key instead of IP
-  keyGenerator: (req: AuthenticatedRequest): string => {
-    return `${req.user!.id}`;
+  keyGenerator: (req: Request): string => {
+    return `${req.user!.userId}`; // Assumes req.user is populated by authentication middleware
   },
   // Custom handler to provide user-specific error message
-  handler: (req: AuthenticatedRequest, res: Response): void => {
+  handler: (req: Request, res: Response): void => {
     res.status(429).json({
       error: 'Too many requests from your account, please try again later.',
-      userId: req.user!.id,
+      userId: req.user!.userId,
     });
   },
-  skip: (req: AuthenticatedRequest): boolean => {
+  skip: (req: Request): boolean => {
     // Skip rate limiting for admin users
     return req.user!.role === 'ADMIN';
   },

@@ -5,6 +5,13 @@ import type { Request, Response } from 'express';
 import firebaseAdmin from '../firebase.js';
 import { prisma } from '../prisma.js';
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+};
+
 export const verifyFirebaseToken = async (req: Request, res: Response) => {
   const { firebaseToken } = req.body;
   if (!firebaseToken) {
@@ -17,15 +24,13 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
       .verifyIdToken(firebaseToken);
 
     if (!firebaseUser) {
-      res.status(401).json({ message: 'Unauthorized: Invalid token' });
-      return;
+      return res.status(401).json({ message: 'Unauthorized: Invalid token' });
     }
 
     if (!firebaseUser.email || !firebaseUser.email.endsWith('@cornell.edu')) {
-      res
+      return res
         .status(403)
         .json({ error: 'Forbidden: Access is restricted to Cornell users.' });
-      return;
     }
 
     // Fetch user from the database using the email
@@ -35,11 +40,10 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 
     if (!user) {
       // User was not created by admin (and is not admin), so deny access
-      res.status(403).json({
+      return res.status(403).json({
         error:
           'Forbidden: User not found in the database. Please contact an administrator.',
       });
-      return;
     }
 
     // Fill in firebaseId field (if missing)
@@ -67,13 +71,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
       data: { refreshToken: user.refreshToken },
     });
 
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-
+    res.cookie('refreshToken', refreshToken, cookieOptions);
     return res.json({ accessToken });
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
@@ -118,16 +116,10 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
       data: { refreshToken: newRefreshToken },
     });
 
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-
+    res.cookie('refreshToken', newRefreshToken, cookieOptions);
     return res.json({ accessToken: newAccessToken });
   } catch (error) {
     console.error('Error refreshing access token:', error);
     return res.status(401).json({ error: 'Unauthorized: Invalid token.' });
   }
-}
+};
