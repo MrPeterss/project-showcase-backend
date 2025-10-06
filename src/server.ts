@@ -11,6 +11,10 @@ import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
 import userRouter from './users/userRouter.js';
 
 const app = express();
+
+// Trust proxy - necessary when behind a reverse proxy (nginx)
+app.set('trust proxy', 1);
+
 app.use(requestLogger);
 app.use(helmet());
 app.use(express.json());

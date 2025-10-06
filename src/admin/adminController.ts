@@ -1,8 +1,9 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 
+import type { AuthenticatedRequest } from '../middleware/authentication.js';
 import { prisma } from '../prisma.js';
 
-export const listUsers = async (_: Request, res: Response) => {
+export const listUsers = async (_: AuthenticatedRequest, res: Response) => {
   const users = await prisma.user.findMany();
   res.json(users);
 };

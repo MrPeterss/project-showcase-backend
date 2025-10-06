@@ -44,23 +44,27 @@ export const authenticateFirebase = async (
 
     req.firebaseUser = firebaseUser;
 
-    // Fetch the user from the database using the Firebase UID
+    // Fetch user from the database using the email
     const user = await prisma.user.findUnique({
-      where: { firebaseId: firebaseUser.uid },
+      where: { email: firebaseUser.email },
     });
 
     if (!user) {
-      // Create the user if they don't exist or add the firebaseId if missing
-      const newUser = await prisma.user.upsert({
-        where: { email: firebaseUser.email },
-        update: { firebaseId: firebaseUser.uid },
-        create: {
-          email: firebaseUser.email,
-          firebaseId: firebaseUser.uid,
-          role: 'STUDENT',
-        },
+      // User was not created by admin (and is not admin), so deny access
+      res.status(403).json({
+        error:
+          'Forbidden: User not found in the database. Please contact an administrator.',
       });
-      req.user = newUser;
+      return;
+    }
+
+    // Fill in firebaseId field (if missing) and attach user to request
+    if (!user.firebaseId) {
+      const updatedUser = await prisma.user.update({
+        where: { email: firebaseUser.email },
+        data: { firebaseId: firebaseUser.uid },
+      });
+      req.user = updatedUser;
     } else {
       req.user = user;
     }
