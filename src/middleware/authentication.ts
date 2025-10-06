@@ -1,6 +1,7 @@
 import type { auth } from 'firebase-admin';
 
 import type { User } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 import type { NextFunction, Request, Response } from 'express';
 
@@ -21,7 +22,7 @@ export const authenticateFirebase = async (
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res
       .status(401)
-      .send({ error: 'Unauthorized: No token provided or wrong format.' });
+      .json({ error: 'Unauthorized: No token provided or wrong format.' });
     return;
   }
 
@@ -38,7 +39,7 @@ export const authenticateFirebase = async (
     if (!firebaseUser.email || !firebaseUser.email.endsWith('@cornell.edu')) {
       res
         .status(403)
-        .send({ error: 'Forbidden: Access is restricted to Cornell users.' });
+        .json({ error: 'Forbidden: Access is restricted to Cornell users.' });
       return;
     }
 
@@ -71,7 +72,7 @@ export const authenticateFirebase = async (
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
-    res.status(401).send({ error: 'Unauthorized: Invalid or expired token.' });
+    res.status(401).json({ error: 'Unauthorized: Invalid or expired token.' });
   }
 };
 
@@ -82,7 +83,7 @@ export const requireAdmin = (
   res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user!.role !== 'ADMIN') {
+  if (req.user!.role !== Role.ADMIN) {
     res.status(403).json({ error: 'Forbidden: Admin access required' });
     return;
   }
@@ -97,7 +98,7 @@ export const requireInstructorOrAdmin = (
   res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user!.role !== 'ADMIN' && req.user!.role !== 'INSTRUCTOR') {
+  if (req.user!.role !== Role.ADMIN && req.user!.role !== Role.INSTRUCTOR) {
     res.status(403).json({
       error: 'Forbidden: Instructor or admin access required',
     });

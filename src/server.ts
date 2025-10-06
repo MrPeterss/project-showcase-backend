@@ -5,10 +5,11 @@ import express from 'express';
 import type { Request, Response } from 'express';
 
 import adminRouter from './admin/adminRouter.js';
+import teamRouter from './teams/teamRouter.js';
+import courseRouter from './courses/courseRouter.js';
 import { authenticateFirebase } from './middleware/authentication.js';
 import { requestLogger } from './middleware/logger.js';
 import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
-import userRouter from './users/userRouter.js';
 
 const app = express();
 
@@ -36,7 +37,10 @@ router.get('/health', (_: Request, res: Response) => {
 router.use(authenticateFirebase);
 router.use(userLimiter);
 router.use('/admin', adminRouter);
-router.use('/users', userRouter);
+router.use('/teams', teamRouter);
+router.use('/courses', courseRouter);
+
+// TODO: Global error handler
 
 app.use(router);
 
