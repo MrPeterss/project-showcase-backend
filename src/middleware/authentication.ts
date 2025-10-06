@@ -1,6 +1,7 @@
 import type { auth } from 'firebase-admin';
 
 import type { User } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 import type { NextFunction, Request, Response } from 'express';
 
@@ -21,7 +22,7 @@ export const authenticateFirebase = async (
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res
       .status(401)
-      .send({ error: 'Unauthorized: No token provided or wrong format.' });
+      .json({ error: 'Unauthorized: No token provided or wrong format.' });
     return;
   }
 
@@ -38,36 +39,40 @@ export const authenticateFirebase = async (
     if (!firebaseUser.email || !firebaseUser.email.endsWith('@cornell.edu')) {
       res
         .status(403)
-        .send({ error: 'Forbidden: Access is restricted to Cornell users.' });
+        .json({ error: 'Forbidden: Access is restricted to Cornell users.' });
       return;
     }
 
     req.firebaseUser = firebaseUser;
 
-    // Fetch the user from the database using the Firebase UID
+    // Fetch user from the database using the email
     const user = await prisma.user.findUnique({
-      where: { firebaseId: firebaseUser.uid },
+      where: { email: firebaseUser.email },
     });
 
     if (!user) {
-      // Create the user if they don't exist or add the firebaseId if missing
-      const newUser = await prisma.user.upsert({
-        where: { email: firebaseUser.email },
-        update: { firebaseId: firebaseUser.uid },
-        create: {
-          email: firebaseUser.email,
-          firebaseId: firebaseUser.uid,
-          role: 'STUDENT',
-        },
+      // User was not created by admin (and is not admin), so deny access
+      res.status(403).json({
+        error:
+          'Forbidden: User not found in the database. Please contact an administrator.',
       });
-      req.user = newUser;
+      return;
+    }
+
+    // Fill in firebaseId field (if missing) and attach user to request
+    if (!user.firebaseId) {
+      const updatedUser = await prisma.user.update({
+        where: { email: firebaseUser.email },
+        data: { firebaseId: firebaseUser.uid },
+      });
+      req.user = updatedUser;
     } else {
       req.user = user;
     }
     next();
   } catch (error) {
     console.error('Error verifying Firebase ID token:', error);
-    res.status(401).send({ error: 'Unauthorized: Invalid or expired token.' });
+    res.status(401).json({ error: 'Unauthorized: Invalid or expired token.' });
   }
 };
 
@@ -78,7 +83,7 @@ export const requireAdmin = (
   res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user!.role !== 'ADMIN') {
+  if (req.user!.role !== Role.ADMIN) {
     res.status(403).json({ error: 'Forbidden: Admin access required' });
     return;
   }
@@ -93,7 +98,7 @@ export const requireInstructorOrAdmin = (
   res: Response,
   next: NextFunction,
 ): void => {
-  if (req.user!.role !== 'ADMIN' && req.user!.role !== 'INSTRUCTOR') {
+  if (req.user!.role !== Role.ADMIN && req.user!.role !== Role.INSTRUCTOR) {
     res.status(403).json({
       error: 'Forbidden: Instructor or admin access required',
     });
