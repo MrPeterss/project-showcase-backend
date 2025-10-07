@@ -6,10 +6,9 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "NODE_ENV=production node dist/server.js",
+    "start:prod": "NODE_ENV=production node dist/server.js",
     "start:dev": "NODE_ENV=development node dist/server.js",
     "dev": "NODE_ENV=development nodemon -x tsx src/server.ts",
-    "test": "NODE_ENV=test nodemon -x tsx src/server.ts",
     "lint": "eslint '{src,test}/**/*.ts' --fix",
     "format": "prettier --write '{src,test}/**/*.ts'",
     "seed": "tsx prisma/seed.ts"

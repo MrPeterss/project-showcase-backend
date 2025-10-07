@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 
-// TODO: Switch to bucket-based rate limiting for distributed environments
+// TODO: Switch to bucket-based rate limiting
 
 // Configurable rate limiting per IP
 export const apiLimiter = rateLimit({
@@ -23,7 +23,7 @@ export const userLimiter = rateLimit({
   legacyHeaders: false,
   // Use user ID as the key instead of IP
   keyGenerator: (req: Request): string => {
-    return `${req.user!.userId}`; // Assumes req.user is populated by authentication middleware
+    return `user_${req.user!.userId}`; // Assumes req.user is populated by authentication middleware
   },
   // Custom handler to provide user-specific error message
   handler: (req: Request, res: Response): void => {
