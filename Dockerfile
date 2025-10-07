@@ -59,4 +59,4 @@ COPY --from=builder /app/dist ./dist
 RUN mkdir -p /app/data
 
 # Start the application with migrations and seeding
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js && npm start"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js && npm start:prod"]
