@@ -10,7 +10,7 @@ import authRouter from './auth/authRouter.js';
 import courseRouter from './courses/courseRouter.js';
 import { requireAuth } from './middleware/authentication.js';
 import { requestLogger } from './middleware/logger.js';
-import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
+import { userRateLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
 import semesterRouter from './semesters/semesterRouter.js';
 import teamRouter from './teams/teamRouter.js';
@@ -27,7 +27,6 @@ app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 
 const router = express.Router();
-router.use(apiLimiter);
 
 // Health check endpoint
 router.get('/health', async (_: Request, res: Response) => {
@@ -56,7 +55,7 @@ router.use('/auth', authRouter);
 
 // Protected routes (require authentication)
 router.use(requireAuth);
-router.use(userLimiter);
+router.use(userRateLimiter);
 router.use('/admin', adminRouter);
 router.use('/users', userRouter);
 router.use('/semesters', semesterRouter);
