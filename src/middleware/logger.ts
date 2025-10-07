@@ -48,7 +48,7 @@ const formatResponseTime = (time: number): string => {
   return `${color}${time}ms${colors.reset}`;
 };
 
-export const logger = (
+export const requestLogger = (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -96,47 +96,3 @@ export const logger = (
 
   next();
 };
-
-// Simple version without colors for production
-export const simpleLogger = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void => {
-  const startTime = Date.now();
-  const timestamp = new Date().toISOString();
-
-  // Listen for when the response finishes
-  res.on('finish', () => {
-    const endTime = Date.now();
-    const responseTime = endTime - startTime;
-    const userAgent = req.get('User-Agent') || 'Unknown';
-    const contentLength = res.get('Content-Length') || '0';
-
-    // Simple log format for production
-    console.log(
-      `[${timestamp}] ${req.method} ${req.originalUrl || req.url} ` +
-        `${res.statusCode} - ${responseTime}ms ${contentLength}b ` +
-        `${req.ip || req.connection.remoteAddress} "${userAgent}"`,
-    );
-  });
-
-  // Handle connection errors
-  res.on('close', () => {
-    if (!res.writableEnded) {
-      const endTime = Date.now();
-      const responseTime = endTime - startTime;
-      console.log(
-        `[${timestamp}] ${req.method} ${req.originalUrl || req.url} ` +
-          `CONNECTION_CLOSED - ${responseTime}ms ` +
-          `${req.ip || req.connection.remoteAddress}`,
-      );
-    }
-  });
-
-  next();
-};
-
-// Export the appropriate logger based on environment
-export const requestLogger =
-  process.env.NODE_ENV === 'production' ? simpleLogger : logger;
