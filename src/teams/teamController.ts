@@ -23,7 +23,9 @@ export const getTeamById = async (req: Request, res: Response) => {
 export const createTeam = async (req: Request, res: Response) => {
   const { name, port, courseId } = req.body;
   if (!name || !port || !courseId) {
-    return res.status(400).json({ error: 'Name, port, and courseId are required' });
+    return res
+      .status(400)
+      .json({ error: 'Name, port, and courseId are required' });
   }
 
   try {

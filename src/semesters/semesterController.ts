@@ -31,7 +31,11 @@ export const createSemester = async (req: Request, res: Response) => {
 
   try {
     const newSemester = await prisma.semester.create({
-      data: { shortName, startDate: new Date(startDate), endDate: new Date(endDate) },
+      data: {
+        shortName,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+      },
     });
     return res.status(201).json(newSemester);
   } catch (error) {
@@ -47,7 +51,11 @@ export const updateSemester = async (req: Request, res: Response) => {
   try {
     const updatedSemester = await prisma.semester.update({
       where: { id: semesterId },
-      data: { shortName, startDate: new Date(startDate), endDate: new Date(endDate) },
+      data: {
+        shortName,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+      },
     });
     return res.json(updatedSemester);
   } catch (error) {
@@ -60,7 +68,7 @@ export const deleteSemester = async (req: Request, res: Response) => {
   const semesterId = Number(req.params.semesterId);
 
   try {
-    await prisma.semester.delete({  where: { id: semesterId } });
+    await prisma.semester.delete({ where: { id: semesterId } });
     return res.status(204).send();
   } catch (error) {
     console.error(error);

@@ -2,11 +2,11 @@ import { Router } from 'express';
 
 import { requireAdmin } from '../middleware/authentication.js';
 import {
-  listTeams,
-  getTeamById,
   createTeam,
-  updateTeam,
   deleteTeam,
+  getTeamById,
+  listTeams,
+  updateTeam,
 } from './teamController.js';
 
 const router = Router();

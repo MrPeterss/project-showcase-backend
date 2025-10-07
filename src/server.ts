@@ -12,6 +12,7 @@ import { requireAuth } from './middleware/authentication.js';
 import { requestLogger } from './middleware/logger.js';
 import { apiLimiter, userLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
+import semesterRouter from './semesters/semesterRouter.js';
 import teamRouter from './teams/teamRouter.js';
 import userRouter from './users/userRouter.js';
 
@@ -58,6 +59,7 @@ router.use(requireAuth);
 router.use(userLimiter);
 router.use('/admin', adminRouter);
 router.use('/users', userRouter);
+router.use('/semesters', semesterRouter);
 router.use('/teams', teamRouter);
 router.use('/courses', courseRouter);
 
