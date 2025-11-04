@@ -1,5 +1,5 @@
 export interface AuthJwtPayload {
-  userId: string;
+  userId: number;
   isAdmin: boolean;
 }
 
