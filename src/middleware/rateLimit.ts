@@ -23,6 +23,6 @@ export const userRateLimiter = rateLimit({
   },
   skip: (req: Request): boolean => {
     // Skip rate limiting for admin users
-    return req.user!.role === 'ADMIN';
+    return req.user!.isAdmin;
   },
 });
