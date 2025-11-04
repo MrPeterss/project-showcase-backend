@@ -16,7 +16,7 @@ enum CourseOfferingRole {
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
-  refreshToken String?
+  refreshToken String?  @unique
   firebaseId   String?  @unique
   isAdmin      Boolean  @default(false)
   createdAt    DateTime @default(now())

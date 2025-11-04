@@ -72,7 +72,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { refreshToken: user.refreshToken },
+    data: { refreshToken },
   });
 
   res.cookie('refreshToken', refreshToken, cookieOptions);
@@ -85,13 +85,8 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
     throw new UnauthorizedError('No refresh token provided');
   }
 
-  const payload = jwt.verify(
-    refreshToken,
-    process.env.REFRESH_TOKEN_SECRET!,
-  ) as { userId: number };
-
-  const user = await prisma.user.findUnique({
-    where: { id: payload.userId },
+  const user = await prisma.user.findFirst({
+    where: { refreshToken },
   });
 
   if (!user || user.refreshToken !== refreshToken) {
