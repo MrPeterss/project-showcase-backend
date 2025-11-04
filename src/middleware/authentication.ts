@@ -1,7 +1,5 @@
 import jwt from 'jsonwebtoken';
 
-import { Role } from '@prisma/client';
-
 import type { NextFunction, Request, Response } from 'express';
 
 import type { AuthJwtPayload } from '../types/express/index.js';
@@ -39,21 +37,8 @@ export const requireAdmin = (
   _res: Response,
   next: NextFunction,
 ) => {
-  if (req.user!.role !== Role.ADMIN) {
+  if (!req.user!.isAdmin) {
     throw new ForbiddenError('Admin access required');
-  }
-  return next();
-};
-
-// Middleware to require instructor or admin role
-// Must be used after requireAuth
-export const requireInstructorOrAdmin = (
-  req: Request,
-  _res: Response,
-  next: NextFunction,
-) => {
-  if (req.user!.role !== Role.ADMIN && req.user!.role !== Role.INSTRUCTOR) {
-    throw new ForbiddenError('Instructor or admin access required');
   }
   return next();
 };

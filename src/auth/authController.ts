@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 import { FirebaseAppError } from 'firebase-admin/app';
 
@@ -62,16 +63,12 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
   }
 
   const accessToken = jwt.sign(
-    { userId: user.id, role: user.role },
+    { userId: user.id, isAdmin: user.isAdmin },
     process.env.ACCESS_TOKEN_SECRET!,
     { expiresIn: '15m' },
   );
 
-  const refreshToken = jwt.sign(
-    { userId: user.id },
-    process.env.REFRESH_TOKEN_SECRET!,
-    { expiresIn: '7d' },
-  );
+  const refreshToken = crypto.randomBytes(64).toString('hex');
 
   await prisma.user.update({
     where: { id: user.id },
@@ -102,16 +99,12 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
   }
 
   const newAccessToken = jwt.sign(
-    { userId: user.id, role: user.role },
+    { userId: user.id, isAdmin: user.isAdmin },
     process.env.ACCESS_TOKEN_SECRET!,
     { expiresIn: '15m' },
   );
 
-  const newRefreshToken = jwt.sign(
-    { userId: user.id },
-    process.env.REFRESH_TOKEN_SECRET!,
-    { expiresIn: '7d' },
-  );
+  const newRefreshToken = crypto.randomBytes(64).toString('hex');
 
   await prisma.user.update({
     where: { id: user.id },

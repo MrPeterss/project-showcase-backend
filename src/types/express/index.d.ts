@@ -1,6 +1,6 @@
 export interface AuthJwtPayload {
   userId: string;
-  role: string;
+  isAdmin: boolean;
 }
 
 // Extend the Express Request interface to include injected user property

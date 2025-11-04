@@ -4,7 +4,6 @@ import { requireAdmin } from '../middleware/authentication.js';
 
 const router = Router();
 
-// TODO: FINISH ROUTES
 router.get('/stats', requireAdmin, (_req, res) => {
   res.json({ message: 'Admin stats endpoint' });
 });
