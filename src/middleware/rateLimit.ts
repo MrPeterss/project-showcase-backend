@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 
+import { TooManyRequestsError } from '../utils/AppError.js';
+
 // Rate limiting per authenticated user account id
 // This should be used after authentication middleware
 export const userRateLimiter = rateLimit({
@@ -11,11 +13,13 @@ export const userRateLimiter = rateLimit({
   keyGenerator: (req: Request): string => {
     return `user:${req.user!.userId}`; // Assumes req.user is populated by authentication middleware
   },
-  handler: (req: Request, res: Response): void => {
-    res.status(429).json({
-      error: 'Too many requests from your account, please try again later.',
-      userId: req.user!.userId,
-    });
+  handler: (req: Request, _res: Response): void => {
+    throw new TooManyRequestsError(
+      'Too many requests from your account, please try again later.',
+      {
+        userId: req.user!.userId,
+      },
+    );
   },
   skip: (req: Request): boolean => {
     // Skip rate limiting for admin users

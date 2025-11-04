@@ -7,73 +7,90 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
+enum CourseOfferingRole {
   INSTRUCTOR
   STUDENT
+  VIEWER
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  refreshToken String?
+  firebaseId   String?  @unique
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  courseOfferingEnrollments CourseOfferingEnrollment[]
+  teamMemberships           TeamMembership[]
+}
+
+model Course {
+  id         Int      @id @default(autoincrement())
+  name       String
+  number     Int
+  department String
+  createdAt  DateTime @default(now())
+
+  offerings CourseOffering[]
 }
 
 model Semester {
   id        Int      @id @default(autoincrement())
-  shortName String
+  season    String
+  year      Int
   startDate DateTime
   endDate   DateTime
-  courses   Course[]
+  createdAt DateTime @default(now())
+
+  offerings CourseOffering[]
 }
 
-model Course {
-  id           Int           @id @default(autoincrement())
-  department   String
-  number       Int
-  name         String
-  projectTypes ProjectType[]
-  teams        Team[]
-  semester     Semester      @relation(fields: [semesterId], references: [id])
-  semesterId   Int
-}
+model CourseOffering {
+  id        Int      @id @default(autoincrement())
+  settings  Json
+  createdAt DateTime @default(now())
 
-model ProjectType {
-  id       Int    @id @default(autoincrement())
-  name     String
-  content  Bytes
-  course   Course @relation(fields: [courseId], references: [id])
-  courseId Int
+  course     Course   @relation(fields: [courseId], references: [id])
+  courseId   Int
+  semester   Semester @relation(fields: [semesterId], references: [id])
+  semesterId Int
+
+  enrollments CourseOfferingEnrollment[]
+  teams       Team[]
+
+  @@unique([courseId, semesterId])
 }
 
 model Team {
-  id        Int       @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
-  port      Int       @unique
-  course    Course    @relation(fields: [courseId], references: [id])
-  courseId  Int
-  members   User[]
-  projects  Project[]
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
+
+  CourseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])
+  courseOfferingId Int
+
+  members TeamMembership[]
 }
 
-model User {
-  id              Int       @id @default(autoincrement())
-  email           String    @unique
-  refreshToken    String?
-  firebaseId      String?   @unique
-  team            Team?     @relation(fields: [teamId], references: [id])
-  teamId          Int?
-  projectsCreated Project[]
-  createdAt       DateTime  @default(now())
-  role            Role      @default(STUDENT)
+model CourseOfferingEnrollment {
+  role CourseOfferingRole
+
+  user             User           @relation(fields: [userId], references: [id])
+  userId           Int
+  courseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])
+  courseOfferingId Int
+
+  @@id([userId, courseOfferingId])
 }
 
-model Project {
-  id           Int       @id @default(autoincrement())
-  team         Team      @relation(fields: [teamId], references: [id])
-  teamId       Int
-  deployedBy   User      @relation(fields: [deployedById], references: [id])
-  deployedById Int
-  status       String // e.g., 'running', 'stopped', 'error'.   FIX with ENUM
-  containerId  String? // Docker container ID
-  gitHubLink   String
-  deployedAt   DateTime  @default(now())
-  stoppedAt    DateTime?
+model TeamMembership {
+  user   User @relation(fields: [userId], references: [id])
+  userId Int
+  team   Team @relation(fields: [teamId], references: [id])
+  teamId Int
 
-  @@unique([teamId, status]) // Fix
+  @@id([userId, teamId])
 }
+
+// Add deployments table

@@ -3,12 +3,13 @@ import 'dotenv/config';
 import helmet from 'helmet';
 
 import express from 'express';
-import type { NextFunction, Request, Response } from 'express';
+import type { Request, Response } from 'express';
 
 import adminRouter from './admin/adminRouter.js';
 import authRouter from './auth/authRouter.js';
 import courseRouter from './courses/courseRouter.js';
 import { requireAuth } from './middleware/authentication.js';
+import { globalErrorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { userRateLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
@@ -62,24 +63,9 @@ router.use('/semesters', semesterRouter);
 router.use('/teams', teamRouter);
 router.use('/courses', courseRouter);
 
-app.use((err: Error, _req: Request, res: Response, _: NextFunction) => {
-  console.error('Error:', err);
-
-  const statusCode = (err as { statusCode?: number }).statusCode || 500;
-  const message =
-    process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : err.message;
-
-  res.status(statusCode).json({
-    error: {
-      message,
-      ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
-    },
-  });
-});
-
 app.use(router);
+
+app.use(globalErrorHandler);
 
 const port = process.env.PORT || '8000';
 
