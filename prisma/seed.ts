@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -32,10 +32,10 @@ async function main() {
 
       if (existingUser) {
         // Make sure the existing user is an admin
-        if (existingUser.role !== Role.ADMIN) {
+        if (existingUser.isAdmin !== true) {
           await prisma.user.update({
             where: { email },
-            data: { role: Role.ADMIN },
+            data: { isAdmin: true },
           });
           console.log(`✓ Updated user to admin: ${email} (ID: ${existingUser.id})`);
         } else {
@@ -47,7 +47,7 @@ async function main() {
       const user = await prisma.user.create({
         data: {
           email,
-          role: Role.ADMIN,
+          isAdmin: true,
           // firebaseId and teamId are null until the user logs in
         },
       });
