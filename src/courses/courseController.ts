@@ -16,7 +16,7 @@ export const createCourse = async (req: Request, res: Response) => {
 };
 
 export const updateCourse = async (req: Request, res: Response) => {
-  const courseId = parseInt(req.params.id, 10);
+  const courseId = parseInt(req.params.courseId, 10);
   const { name, number, department } = req.body;
 
   const existingCourse = await prisma.course.findUnique({
@@ -36,7 +36,7 @@ export const updateCourse = async (req: Request, res: Response) => {
 };
 
 export const deleteCourse = async (req: Request, res: Response) => {
-  const courseId = parseInt(req.params.id, 10);
+  const courseId = parseInt(req.params.courseId, 10);
 
   const existingCourse = await prisma.course.findUnique({
     where: { id: courseId },

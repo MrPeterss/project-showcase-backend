@@ -7,9 +7,9 @@ import { courseSchema } from './courses.schema.js';
 
 const router = Router();
 
-router.get('/courses', requireAdmin, getAllCourses);
-router.post('/courses', requireAdmin, validateRequest(courseSchema), createCourse);
-router.put('/courses/:id', requireAdmin, validateRequest(courseSchema), updateCourse);
-router.delete('/courses/:id', requireAdmin, deleteCourse);
+router.get('/', requireAdmin, getAllCourses);
+router.post('/', requireAdmin, validateRequest(courseSchema), createCourse);
+router.put('/:courseId', requireAdmin, validateRequest(courseSchema), updateCourse);
+router.delete('/:courseId', requireAdmin, deleteCourse);
 
 export default router;
