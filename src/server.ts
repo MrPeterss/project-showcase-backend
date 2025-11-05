@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 
 import adminRouter from './admin/adminRouter.js';
 import authRouter from './auth/authRouter.js';
-// import courseRouter from './courses/courseRouter.js';
+import courseRouter from './courses/courseRouter.js';
 import { requireAuth } from './middleware/authentication.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
@@ -61,7 +61,7 @@ router.use('/admin', adminRouter);
 router.use('/users', userRouter);
 // router.use('/semesters', semesterRouter);
 // router.use('/teams', teamRouter);
-// router.use('/courses', courseRouter);
+router.use('/courses', courseRouter);
 
 app.use(router);
 
