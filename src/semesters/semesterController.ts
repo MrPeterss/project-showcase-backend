@@ -8,6 +8,20 @@ export const getAllSemesters = async (_req: Request, res: Response) => {
   return res.json(semesters);
 };
 
+export const getSemesterById = async (req: Request, res: Response) => {
+  const semesterId = parseInt(req.params.semesterId, 10);
+
+  const semester = await prisma.semester.findUnique({
+    where: { id: semesterId },
+  });
+
+  if (!semester) {
+    throw new NotFoundError('Semester not found');
+  }
+
+  return res.json(semester);
+}
+
 export const createSemester = async (req: Request, res: Response) => {
   const { season, year, startDate, endDate } = req.body;
   const newSemester = await prisma.semester.create({
