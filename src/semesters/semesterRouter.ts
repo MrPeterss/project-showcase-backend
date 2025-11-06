@@ -9,7 +9,7 @@ const router = Router();
 
 router.get('/', requireAdmin, getAllSemesters);
 router.post('/', requireAdmin, validateRequest(semesterSchema), createSemester);
-router.put('/:id', requireAdmin, validateRequest(semesterSchema), updateSemester);
-router.delete('/:id', requireAdmin, deleteSemester);
+router.put('/:semesterId', requireAdmin, validateRequest(semesterSchema), updateSemester);
+router.delete('/:semesterId', requireAdmin, deleteSemester);
 
 export default router;

@@ -16,7 +16,7 @@ export const createSemester = async (req: Request, res: Response) => {
 };
 
 export const updateSemester = async (req: Request, res: Response) => {
-  const semesterId = parseInt(req.params.id, 10);
+  const semesterId = parseInt(req.params.semesterId, 10);
   const { season, year, startDate, endDate } = req.body;
 
   const existingSemester = await prisma.semester.findUnique({
@@ -36,7 +36,7 @@ export const updateSemester = async (req: Request, res: Response) => {
 };
 
 export const deleteSemester = async (req: Request, res: Response) => {
-  const semesterId = parseInt(req.params.id, 10);
+  const semesterId = parseInt(req.params.semesterId, 10);
 
   const existingSemester = await prisma.semester.findUnique({
     where: { id: semesterId },
