@@ -1,5 +1,6 @@
-import { prisma } from '../prisma.js';
 import type { Request, Response } from 'express';
+
+import { prisma } from '../prisma.js';
 import { NotFoundError } from '../utils/AppError.js';
 
 export const getAllSemesters = async (_req: Request, res: Response) => {
@@ -10,7 +11,12 @@ export const getAllSemesters = async (_req: Request, res: Response) => {
 export const createSemester = async (req: Request, res: Response) => {
   const { season, year, startDate, endDate } = req.body;
   const newSemester = await prisma.semester.create({
-    data: { season, year, startDate: new Date(startDate), endDate: new Date(endDate) },
+    data: {
+      season,
+      year,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    },
   });
   return res.status(201).json(newSemester);
 };
@@ -29,7 +35,12 @@ export const updateSemester = async (req: Request, res: Response) => {
 
   const updatedSemester = await prisma.semester.update({
     where: { id: semesterId },
-    data: { season, year, startDate: new Date(startDate), endDate: new Date(endDate) },
+    data: {
+      season,
+      year,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    },
   });
 
   return res.json(updatedSemester);

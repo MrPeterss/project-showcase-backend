@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 
 import { FirebaseAppError } from 'firebase-admin/app';
 
@@ -55,7 +55,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
       isAdmin: false,
       refreshToken,
     },
-  })
+  });
 
   const accessToken = jwt.sign(
     { userId: user.id, isAdmin: user.isAdmin },
