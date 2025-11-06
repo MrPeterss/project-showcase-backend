@@ -13,7 +13,7 @@ import {
 
 const router = Router();
 
-router.get('/', requireAdmin, getAllSemesters);
+router.get('/', getAllSemesters);
 router.get('/:semesterId', requireAdmin, getSemesterById);
 router.post('/', requireAdmin, validateRequest(semesterSchema), createSemester);
 router.put(

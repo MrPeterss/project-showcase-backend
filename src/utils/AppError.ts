@@ -4,6 +4,7 @@ export enum ErrorCodes {
   UNAUTHORIZED = 'UNAUTHORIZED', // 401
   FORBIDDEN = 'FORBIDDEN', // 403
   NOT_FOUND = 'NOT_FOUND', // 404
+  CONFLICT = 'CONFLICT', // 409
   TOO_MANY_REQUESTS = 'TOO_MANY_REQUESTS', // 429
 }
 
@@ -67,6 +68,15 @@ export class NotFoundError extends AppError {
     data?: Record<string, unknown>,
   ) {
     super(message, 404, ErrorCodes.NOT_FOUND, data);
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(
+    message: string = 'Conflict',
+    data?: Record<string, unknown>,
+  ) {
+    super(message, 409, ErrorCodes.CONFLICT, data);
   }
 }
 
