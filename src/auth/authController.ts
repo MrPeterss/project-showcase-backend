@@ -42,38 +42,26 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
     throw new ForbiddenError('Access is restricted to Cornell users.');
   }
 
-  // Fetch user from the database using the email
-  const user = await prisma.user.findUnique({
+  const refreshToken = crypto.randomBytes(64).toString('hex');
+
+  const user = await prisma.user.upsert({
     where: { email: firebaseUser.email },
-  });
-
-  if (!user) {
-    // User was not created by admin (and is not admin), so deny access
-    throw new ForbiddenError(
-      'User not found in the database. Please contact an administrator.',
-    );
-  }
-
-  // Fill in firebaseId field (if missing)
-  if (!user.firebaseId) {
-    await prisma.user.update({
-      where: { email: firebaseUser.email },
-      data: { firebaseId: firebaseUser.uid },
-    });
-  }
+    // If the user exists, update the refreshToken and firebaseId
+    update: { refreshToken, firebaseId: firebaseUser.uid },
+    // If the user does not exist, create a new user
+    create: {
+      email: firebaseUser.email,
+      firebaseId: firebaseUser.uid,
+      isAdmin: false,
+      refreshToken,
+    },
+  })
 
   const accessToken = jwt.sign(
     { userId: user.id, isAdmin: user.isAdmin },
     process.env.ACCESS_TOKEN_SECRET!,
     { expiresIn: '15m' },
   );
-
-  const refreshToken = crypto.randomBytes(64).toString('hex');
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshToken },
-  });
 
   res.cookie('refreshToken', refreshToken, cookieOptions);
   return res.json({ accessToken });
