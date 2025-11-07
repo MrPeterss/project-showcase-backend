@@ -64,7 +64,7 @@ model CourseOffering {
 
 model Team {
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String   @unique
   createdAt DateTime @default(now())
 
   CourseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])

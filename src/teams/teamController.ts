@@ -139,16 +139,15 @@ export const createTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Check if team name already exists in this course offering
+  // Check if team name already exists
   const existingTeam = await prisma.team.findFirst({
     where: {
-      name,
-      courseOfferingId: offeringId,
+      name
     },
   });
 
   if (existingTeam) {
-    throw new ConflictError('Team name already exists in this course offering');
+    throw new ConflictError('Team name already exists');
   }
 
   // Process member emails - create users if they don't exist and enroll them

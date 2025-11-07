@@ -249,5 +249,14 @@ export const deleteCourseOfferingEnrollment = async (
     },
   });
 
+  await prisma.teamMember.deleteMany({
+    where: {
+      userId: targetUserId,
+      team: {
+        courseOfferingId: offeringId,
+      },
+    },
+  });
+
   return res.status(204).send();
 };
