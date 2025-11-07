@@ -69,7 +69,7 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
       members: {
         include: {
           user: {
-            select: { id: true, email: true },
+            select: { id: true, name: true, email: true },
           },
         },
       },

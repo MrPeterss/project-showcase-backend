@@ -53,7 +53,7 @@ export const getCourseOfferingEnrollments = async (
     where: { courseOfferingId: offeringId },
     include: {
       user: {
-        select: { id: true, email: true, createdAt: true },
+        select: { id: true, email: true, name: true, createdAt: true },
       },
     },
   });
