@@ -1,14 +1,17 @@
 import { z } from 'zod';
+
 import { COURSE_OFFERING_ROLE_VALUES } from '../constants/roles.js';
 
 export const createEnrollmentsSchema = z.object({
   body: z.object({
-    enrollments: z.array(
-      z.object({
-        email: z.string().email(),
-        role: z.enum(COURSE_OFFERING_ROLE_VALUES),
-      })
-    ).min(1),
+    enrollments: z
+      .array(
+        z.object({
+          email: z.string().email(),
+          role: z.enum(COURSE_OFFERING_ROLE_VALUES),
+        }),
+      )
+      .min(1),
   }),
 });
 

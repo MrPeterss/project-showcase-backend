@@ -1,14 +1,20 @@
-import { prisma } from '../prisma.js';
-import type { Request, Response } from 'express';
-import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.js';
 import type { CourseOfferingRole } from '@prisma/client';
+
+import type { Request, Response } from 'express';
+
 import { COURSE_OFFERING_ROLES, SYSTEM_ROLES } from '../constants/roles.js';
+import { prisma } from '../prisma.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../utils/AppError.js';
 
 // Helper function to check if user has access to course offering
 const checkCourseOfferingAccess = async (
   userId: number,
   offeringId: number,
-  requiredRoles?: CourseOfferingRole[]
+  requiredRoles?: CourseOfferingRole[],
 ) => {
   const enrollment = await prisma.courseOfferingEnrollment.findUnique({
     where: {
@@ -32,7 +38,9 @@ const checkCourseOfferingAccess = async (
 
 // Helper function to check if user is instructor of course offering
 const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  return await checkCourseOfferingAccess(userId, offeringId, [COURSE_OFFERING_ROLES.INSTRUCTOR]);
+  return await checkCourseOfferingAccess(userId, offeringId, [
+    COURSE_OFFERING_ROLES.INSTRUCTOR,
+  ]);
 };
 
 // GET /course-offerings
@@ -56,7 +64,7 @@ export const getAllCourseOfferings = async (req: Request, res: Response) => {
       courseOfferings.map((offering) => ({
         ...offering,
         userRole: SYSTEM_ROLES.ADMIN,
-      }))
+      })),
     );
   }
 
@@ -133,7 +141,9 @@ export const getCourseOffering = async (req: Request, res: Response) => {
   }
 
   // Check if user should have access to enrollments and settings
-  const hasInstructorAccess = userRole === COURSE_OFFERING_ROLES.INSTRUCTOR || userRole === SYSTEM_ROLES.ADMIN;
+  const hasInstructorAccess =
+    userRole === COURSE_OFFERING_ROLES.INSTRUCTOR ||
+    userRole === SYSTEM_ROLES.ADMIN;
 
   // Omit enrollments and settings if user is not an instructor or admin
   const response = {
@@ -175,7 +185,9 @@ export const createCourseOffering = async (req: Request, res: Response) => {
   });
 
   if (existingOffering) {
-    throw new ConflictError('Course offering already exists for this course and semester');
+    throw new ConflictError(
+      'Course offering already exists for this course and semester',
+    );
   }
 
   const courseOffering = await prisma.courseOffering.create({
@@ -211,7 +223,9 @@ export const updateCourseOffering = async (req: Request, res: Response) => {
   if (!isAdmin) {
     const instructorAccess = await checkInstructorAccess(userId, offeringId);
     if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can update course offering settings');
+      throw new ForbiddenError(
+        'Only instructors can update course offering settings',
+      );
     }
   }
 
@@ -259,9 +273,9 @@ export const deleteCourseOffering = async (req: Request, res: Response) => {
     if (hasTeams) {
       issues.push(`${courseOffering.teams.length} team(s)`);
     }
-    
+
     throw new ConflictError(
-      `Cannot delete course offering. It has ${issues.join(' and ')} associated with it. Please remove all enrollments and teams first.`
+      `Cannot delete course offering. It has ${issues.join(' and ')} associated with it. Please remove all enrollments and teams first.`,
     );
   }
 

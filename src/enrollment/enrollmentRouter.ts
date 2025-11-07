@@ -1,44 +1,36 @@
 import { Router } from 'express';
 
-import {
-  getCourseOfferingEnrollments,
-  createCourseOfferingEnrollments,
-  updateCourseOfferingEnrollment,
-  deleteCourseOfferingEnrollment,
-} from './enrollmentController.js';
-
 import { validateRequest } from '../middleware/validateRequest.js';
-
 import {
   createEnrollmentsSchema,
   updateEnrollmentSchema,
 } from './enrollment.schema.js';
+import {
+  createCourseOfferingEnrollments,
+  deleteCourseOfferingEnrollment,
+  getCourseOfferingEnrollments,
+  updateCourseOfferingEnrollment,
+} from './enrollmentController.js';
 
 const router = Router();
 
 // All enrollment routes are nested under course offerings
 // These routes handle /course-offerings/:offeringId/enrollments
 
-router.get(
-  '/',
-  getCourseOfferingEnrollments
-);
+router.get('/', getCourseOfferingEnrollments);
 
 router.post(
   '/',
   validateRequest(createEnrollmentsSchema),
-  createCourseOfferingEnrollments
+  createCourseOfferingEnrollments,
 );
 
 router.put(
   '/:userId',
   validateRequest(updateEnrollmentSchema),
-  updateCourseOfferingEnrollment
+  updateCourseOfferingEnrollment,
 );
 
-router.delete(
-  '/:userId',
-  deleteCourseOfferingEnrollment
-);
+router.delete('/:userId', deleteCourseOfferingEnrollment);
 
 export default router;

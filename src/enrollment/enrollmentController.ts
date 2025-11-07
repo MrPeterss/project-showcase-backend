@@ -1,8 +1,14 @@
-import { prisma } from '../prisma.js';
-import type { Request, Response } from 'express';
-import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.js';
 import type { CourseOfferingRole } from '@prisma/client';
+
+import type { Request, Response } from 'express';
+
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
+import { prisma } from '../prisma.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../utils/AppError.js';
 
 // Helper function to check if user is instructor of course offering
 const checkInstructorAccess = async (userId: number, offeringId: number) => {
@@ -19,7 +25,10 @@ const checkInstructorAccess = async (userId: number, offeringId: number) => {
 };
 
 // GET /course-offerings/:offeringId/enrollments
-export const getCourseOfferingEnrollments = async (req: Request, res: Response) => {
+export const getCourseOfferingEnrollments = async (
+  req: Request,
+  res: Response,
+) => {
   const { userId, isAdmin } = req.user!;
   const offeringId = parseInt(req.params.offeringId, 10);
 
@@ -53,7 +62,10 @@ export const getCourseOfferingEnrollments = async (req: Request, res: Response) 
 };
 
 // POST /course-offerings/:offeringId/enrollments
-export const createCourseOfferingEnrollments = async (req: Request, res: Response) => {
+export const createCourseOfferingEnrollments = async (
+  req: Request,
+  res: Response,
+) => {
   const { userId, isAdmin } = req.user!;
   const offeringId = parseInt(req.params.offeringId, 10);
   const { enrollments } = req.body;
@@ -92,17 +104,21 @@ export const createCourseOfferingEnrollments = async (req: Request, res: Respons
     }
 
     // Check if already enrolled
-    const existingEnrollment = await prisma.courseOfferingEnrollment.findUnique({
-      where: {
-        userId_courseOfferingId: {
-          userId: user.id,
-          courseOfferingId: offeringId,
+    const existingEnrollment = await prisma.courseOfferingEnrollment.findUnique(
+      {
+        where: {
+          userId_courseOfferingId: {
+            userId: user.id,
+            courseOfferingId: offeringId,
+          },
         },
       },
-    });
+    );
 
     if (existingEnrollment) {
-      throw new ConflictError(`User ${email} is already enrolled in this course offering`);
+      throw new ConflictError(
+        `User ${email} is already enrolled in this course offering`,
+      );
     }
 
     // Create enrollment
@@ -126,7 +142,10 @@ export const createCourseOfferingEnrollments = async (req: Request, res: Respons
 };
 
 // PUT /course-offerings/:offeringId/enrollments/:userId
-export const updateCourseOfferingEnrollment = async (req: Request, res: Response) => {
+export const updateCourseOfferingEnrollment = async (
+  req: Request,
+  res: Response,
+) => {
   const { userId: currentUserId, isAdmin } = req.user!;
   const offeringId = parseInt(req.params.offeringId, 10);
   const targetUserId = parseInt(req.params.userId, 10);
@@ -182,7 +201,10 @@ export const updateCourseOfferingEnrollment = async (req: Request, res: Response
 };
 
 // DELETE /course-offerings/:offeringId/enrollments/:userId
-export const deleteCourseOfferingEnrollment = async (req: Request, res: Response) => {
+export const deleteCourseOfferingEnrollment = async (
+  req: Request,
+  res: Response,
+) => {
   const { userId: currentUserId, isAdmin } = req.user!;
   const offeringId = parseInt(req.params.offeringId, 10);
   const targetUserId = parseInt(req.params.userId, 10);

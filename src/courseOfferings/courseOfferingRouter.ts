@@ -1,45 +1,36 @@
 import { Router } from 'express';
 
 import {
-  getAllCourseOfferings,
-  getCourseOffering,
-  createCourseOffering,
-  updateCourseOffering,
-  deleteCourseOffering,
-} from './courseOfferingController.js';
-
+  createEnrollmentsSchema,
+  enrollmentParamsSchema,
+  updateEnrollmentSchema,
+} from '../enrollment/enrollment.schema.js';
 import {
-  getCourseOfferingEnrollments,
   createCourseOfferingEnrollments,
-  updateCourseOfferingEnrollment,
   deleteCourseOfferingEnrollment,
+  getCourseOfferingEnrollments,
+  updateCourseOfferingEnrollment,
 } from '../enrollment/enrollmentController.js';
-
-import {
-  getCourseOfferingTeams,
-  createTeam,
-} from '../teams/teamController.js';
-
-import { validateRequest } from '../middleware/validateRequest.js';
 import { requireAdmin } from '../middleware/authentication.js';
-
+import { validateRequest } from '../middleware/validateRequest.js';
 import {
-  createCourseOfferingSchema,
-  updateCourseOfferingSchema,
+  courseOfferingTeamsParamsSchema,
+  createTeamSchema,
+} from '../teams/team.schema.js';
+import { createTeam, getCourseOfferingTeams } from '../teams/teamController.js';
+import {
   courseOfferingParamsSchema,
   courseOfferingQuerySchema,
+  createCourseOfferingSchema,
+  updateCourseOfferingSchema,
 } from './courseOffering.schema.js';
-
 import {
-  createEnrollmentsSchema,
-  updateEnrollmentSchema,
-  enrollmentParamsSchema,
-} from '../enrollment/enrollment.schema.js';
-
-import {
-  createTeamSchema,
-  courseOfferingTeamsParamsSchema,
-} from '../teams/team.schema.js';
+  createCourseOffering,
+  deleteCourseOffering,
+  getAllCourseOfferings,
+  getCourseOffering,
+  updateCourseOffering,
+} from './courseOfferingController.js';
 
 const router = Router();
 
@@ -47,75 +38,75 @@ const router = Router();
 router.get(
   '/',
   validateRequest(courseOfferingQuerySchema),
-  getAllCourseOfferings
+  getAllCourseOfferings,
 );
 
 router.get(
   '/:offeringId',
   validateRequest(courseOfferingParamsSchema),
-  getCourseOffering
+  getCourseOffering,
 );
 
 router.post(
   '/',
   requireAdmin,
   validateRequest(createCourseOfferingSchema),
-  createCourseOffering
+  createCourseOffering,
 );
 
 router.put(
   '/:offeringId',
   validateRequest(courseOfferingParamsSchema),
   validateRequest(updateCourseOfferingSchema),
-  updateCourseOffering
+  updateCourseOffering,
 );
 
 router.delete(
   '/:offeringId',
   requireAdmin,
   validateRequest(courseOfferingParamsSchema),
-  deleteCourseOffering
+  deleteCourseOffering,
 );
 
 // Enrollment routes
 router.get(
   '/:offeringId/enrollments',
   validateRequest(courseOfferingParamsSchema),
-  getCourseOfferingEnrollments
+  getCourseOfferingEnrollments,
 );
 
 router.post(
   '/:offeringId/enrollments',
   validateRequest(courseOfferingParamsSchema),
   validateRequest(createEnrollmentsSchema),
-  createCourseOfferingEnrollments
+  createCourseOfferingEnrollments,
 );
 
 router.put(
   '/:offeringId/enrollments/:userId',
   validateRequest(enrollmentParamsSchema),
   validateRequest(updateEnrollmentSchema),
-  updateCourseOfferingEnrollment
+  updateCourseOfferingEnrollment,
 );
 
 router.delete(
   '/:offeringId/enrollments/:userId',
   validateRequest(enrollmentParamsSchema),
-  deleteCourseOfferingEnrollment
+  deleteCourseOfferingEnrollment,
 );
 
 // Team routes nested under course offerings
 router.get(
   '/:offeringId/teams',
   validateRequest(courseOfferingTeamsParamsSchema),
-  getCourseOfferingTeams
+  getCourseOfferingTeams,
 );
 
 router.post(
   '/:offeringId/teams',
   validateRequest(courseOfferingTeamsParamsSchema),
   validateRequest(createTeamSchema),
-  createTeam
+  createTeam,
 );
 
 export default router;

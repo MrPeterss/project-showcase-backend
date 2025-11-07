@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import { COURSE_OFFERING_ROLE_VALUES } from '../constants/roles.js';
 
 export const createCourseOfferingSchema = z.object({

@@ -20,7 +20,7 @@ export const getSemesterById = async (req: Request, res: Response) => {
   }
 
   return res.json(semester);
-}
+};
 
 export const createSemester = async (req: Request, res: Response) => {
   const { season, year, startDate, endDate } = req.body;

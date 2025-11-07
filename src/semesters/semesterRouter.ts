@@ -7,8 +7,8 @@ import {
   createSemester,
   deleteSemester,
   getAllSemesters,
-  updateSemester,
   getSemesterById,
+  updateSemester,
 } from './semesterController.js';
 
 const router = Router();

@@ -20,4 +20,5 @@ export const COURSE_OFFERING_ROLE_VALUES: CourseOfferingRole[] = [
 ];
 
 // Type for course offering roles (derived from the constants)
-export type CourseOfferingRoleType = typeof COURSE_OFFERING_ROLES[keyof typeof COURSE_OFFERING_ROLES];
+export type CourseOfferingRoleType =
+  (typeof COURSE_OFFERING_ROLES)[keyof typeof COURSE_OFFERING_ROLES];

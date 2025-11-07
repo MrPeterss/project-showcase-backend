@@ -1,55 +1,45 @@
 import { Router } from 'express';
 
-import {
-  getTeam,
-  updateTeam,
-  deleteTeam,
-  addTeamMembers,
-  removeTeamMember,
-} from './teamController.js';
-
 import { validateRequest } from '../middleware/validateRequest.js';
-
 import {
-  updateTeamSchema,
   addTeamMembersSchema,
-  teamParamsSchema,
   teamMemberParamsSchema,
+  teamParamsSchema,
+  updateTeamSchema,
 } from './team.schema.js';
+import {
+  addTeamMembers,
+  deleteTeam,
+  getTeam,
+  removeTeamMember,
+  updateTeam,
+} from './teamController.js';
 
 const router = Router();
 
 // Team routes that don't require course offering context
-router.get(
-  '/:teamId',
-  validateRequest(teamParamsSchema),
-  getTeam
-);
+router.get('/:teamId', validateRequest(teamParamsSchema), getTeam);
 
 router.put(
   '/:teamId',
   validateRequest(teamParamsSchema),
   validateRequest(updateTeamSchema),
-  updateTeam
+  updateTeam,
 );
 
-router.delete(
-  '/:teamId',
-  validateRequest(teamParamsSchema),
-  deleteTeam
-);
+router.delete('/:teamId', validateRequest(teamParamsSchema), deleteTeam);
 
 router.post(
   '/:teamId/members',
   validateRequest(teamParamsSchema),
   validateRequest(addTeamMembersSchema),
-  addTeamMembers
+  addTeamMembers,
 );
 
 router.delete(
   '/:teamId/members/:userId',
   validateRequest(teamMemberParamsSchema),
-  removeTeamMember
+  removeTeamMember,
 );
 
 export default router;

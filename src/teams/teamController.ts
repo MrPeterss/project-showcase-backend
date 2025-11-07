@@ -1,13 +1,18 @@
-import { prisma } from '../prisma.js';
 import type { Request, Response } from 'express';
-import { NotFoundError, ForbiddenError, ConflictError } from '../utils/AppError.js';
+
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
+import { prisma } from '../prisma.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../utils/AppError.js';
 
 // Helper function to check if user has access to course offering
 const checkCourseOfferingAccess = async (
   userId: number,
   offeringId: number,
-  requiredRoles?: string[]
+  requiredRoles?: string[],
 ) => {
   const enrollment = await prisma.courseOfferingEnrollment.findUnique({
     where: {
@@ -31,7 +36,9 @@ const checkCourseOfferingAccess = async (
 
 // Helper function to check if user is instructor of course offering
 const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  return await checkCourseOfferingAccess(userId, offeringId, [COURSE_OFFERING_ROLES.INSTRUCTOR]);
+  return await checkCourseOfferingAccess(userId, offeringId, [
+    COURSE_OFFERING_ROLES.INSTRUCTOR,
+  ]);
 };
 
 // GET /course-offerings/:offeringId/teams
@@ -97,7 +104,10 @@ export const getTeam = async (req: Request, res: Response) => {
 
   // Check if user has access to the course offering this team belongs to
   if (!isAdmin) {
-    const hasAccess = await checkCourseOfferingAccess(userId, team.courseOfferingId);
+    const hasAccess = await checkCourseOfferingAccess(
+      userId,
+      team.courseOfferingId,
+    );
     if (!hasAccess) {
       throw new ForbiddenError('Access denied to this team');
     }
@@ -223,7 +233,10 @@ export const updateTeam = async (req: Request, res: Response) => {
 
   // Check permissions - admin or instructor of the course offering
   if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(userId, team.courseOfferingId);
+    const isInstructor = await checkInstructorAccess(
+      userId,
+      team.courseOfferingId,
+    );
     if (!isInstructor) {
       throw new ForbiddenError('Only instructors can update teams');
     }
@@ -240,7 +253,9 @@ export const updateTeam = async (req: Request, res: Response) => {
     });
 
     if (existingTeam) {
-      throw new ConflictError('Team name already exists in this course offering');
+      throw new ConflictError(
+        'Team name already exists in this course offering',
+      );
     }
   }
 
@@ -328,7 +343,10 @@ export const deleteTeam = async (req: Request, res: Response) => {
 
   // Check permissions - admin or instructor of the course offering
   if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(userId, team.courseOfferingId);
+    const isInstructor = await checkInstructorAccess(
+      userId,
+      team.courseOfferingId,
+    );
     if (!isInstructor) {
       throw new ForbiddenError('Only instructors can delete teams');
     }
@@ -364,7 +382,10 @@ export const addTeamMembers = async (req: Request, res: Response) => {
 
   // Check permissions - admin or instructor of the course offering
   if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(userId, team.courseOfferingId);
+    const isInstructor = await checkInstructorAccess(
+      userId,
+      team.courseOfferingId,
+    );
     if (!isInstructor) {
       throw new ForbiddenError('Only instructors can add team members');
     }
@@ -372,7 +393,7 @@ export const addTeamMembers = async (req: Request, res: Response) => {
 
   // Process member emails
   const newMemberUserIds = [];
-  const existingMemberEmails = team.members.map(member => member.user.email);
+  const existingMemberEmails = team.members.map((member) => member.user.email);
 
   for (const email of memberEmails) {
     // Check if user is already a member
@@ -456,7 +477,10 @@ export const removeTeamMember = async (req: Request, res: Response) => {
 
   // Check permissions - admin or instructor of the course offering
   if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(currentUserId, team.courseOfferingId);
+    const isInstructor = await checkInstructorAccess(
+      currentUserId,
+      team.courseOfferingId,
+    );
     if (!isInstructor) {
       throw new ForbiddenError('Only instructors can remove team members');
     }
