@@ -249,7 +249,7 @@ export const deleteCourseOfferingEnrollment = async (
     },
   });
 
-  await prisma.teamMember.deleteMany({
+  await prisma.teamMembership.deleteMany({
     where: {
       userId: targetUserId,
       team: {
