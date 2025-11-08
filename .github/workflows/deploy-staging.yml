@@ -28,7 +28,7 @@ jobs:
           docker run -d \
             --name project-showcase-backend \
             --restart unless-stopped \
-            -p 8000:8000 \
+            --network projects_network \
             --env-file ${{ secrets.ENV_FILE_PATH }} \
             -v ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PATH }}:/app/firebase-service-account.json:ro \
             -v ${{ secrets.DATABASE_PATH }}:/app/data/sqlite.db \
