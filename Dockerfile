@@ -58,5 +58,8 @@ COPY --from=builder /app/dist ./dist
 # Create directory for SQLite database
 RUN mkdir -p /app/data
 
+# Create SQLite database file
+RUN touch /app/data/sqlite.db
+
 # Start the application with migrations and seeding
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/prisma/seed.js && npm start"]
