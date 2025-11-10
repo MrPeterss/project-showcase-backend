@@ -510,3 +510,54 @@ export const removeTeamMember = async (req: Request, res: Response) => {
 
   return res.status(204).send();
 };
+
+// GET /course-offerings/:offeringId/teams/me
+export const getMyTeamsInOffering = async (req: Request, res: Response) => {
+  const { userId, isAdmin } = req.user!;
+  const offeringId = parseInt(req.params.offeringId, 10);
+
+  // Check if course offering exists
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: offeringId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Check if user has access to this course offering
+  if (!isAdmin) {
+    const hasAccess = await checkCourseOfferingAccess(userId, offeringId);
+    if (!hasAccess) {
+      throw new ForbiddenError('Access denied to this course offering');
+    }
+  }
+
+  // Get teams the user is a member of in this specific course offering
+  const teamMemberships = await prisma.teamMembership.findMany({
+    where: { 
+      userId,
+      team: {
+        courseOfferingId: offeringId,
+      },
+    },
+    include: {
+      team: {
+        include: {
+          members: {
+            include: {
+              user: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Return just the teams (without course offering info since it's already in the URL)
+  const teams = teamMemberships.map((membership) => membership.team);
+
+  return res.json(teams);
+};

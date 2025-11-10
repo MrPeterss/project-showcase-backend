@@ -17,7 +17,7 @@ import {
   courseOfferingTeamsParamsSchema,
   createTeamSchema,
 } from '../teams/team.schema.js';
-import { createTeam, getCourseOfferingTeams } from '../teams/teamController.js';
+import { createTeam, getCourseOfferingTeams, getMyTeamsInOffering } from '../teams/teamController.js';
 import {
   courseOfferingParamsSchema,
   courseOfferingQuerySchema,
@@ -109,10 +109,10 @@ router.post(
   createTeam,
 );
 
-// // TODO: Finish
-// router.put(
-//   '/:offeringId/teams/:teamId',
-
-// )
+router.get(
+  '/:offeringId/teams/me',
+  validateRequest(courseOfferingTeamsParamsSchema),
+  getMyTeamsInOffering,
+);
 
 export default router;
