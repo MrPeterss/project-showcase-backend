@@ -3,6 +3,7 @@ import type { CourseOfferingRole } from '@prisma/client';
 import type { Request, Response } from 'express';
 
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
+import { CourseOfferingSettingKey } from '../courseOfferings/courseOfferingSettings.js';
 import { prisma } from '../prisma.js';
 import {
   ConflictError,
@@ -138,6 +139,72 @@ export const createCourseOfferingEnrollments = async (
     createdEnrollments.push(newEnrollment);
   }
 
+  // If students were added, grant them viewer enrollments based on course_visibility settings
+  const studentsAdded = createdEnrollments.filter(
+    (e) => e.role === COURSE_OFFERING_ROLES.STUDENT,
+  );
+
+  if (studentsAdded.length > 0) {
+    const courseOfferingWithSettings = await prisma.courseOffering.findUnique({
+      where: { id: offeringId },
+      select: { settings: true },
+    });
+
+    if (courseOfferingWithSettings) {
+      const settings =
+        (courseOfferingWithSettings.settings as Record<string, unknown>) || {};
+      const courseVisibility = Array.isArray(
+        settings[CourseOfferingSettingKey.COURSE_VISIBILITY],
+      )
+        ? (settings[CourseOfferingSettingKey.COURSE_VISIBILITY] as number[])
+        : [];
+
+      if (courseVisibility.length > 0) {
+        const studentIds = studentsAdded.map((e) => e.userId);
+
+        // Get existing viewer enrollments to avoid duplicates
+        const existingEnrollments =
+          await prisma.courseOfferingEnrollment.findMany({
+            where: {
+              userId: { in: studentIds },
+              courseOfferingId: { in: courseVisibility },
+              role: COURSE_OFFERING_ROLES.VIEWER,
+            },
+            select: {
+              userId: true,
+              courseOfferingId: true,
+            },
+          });
+
+        const existingKeys = new Set(
+          existingEnrollments.map((e) => `${e.userId}-${e.courseOfferingId}`),
+        );
+
+        // Create new viewer enrollments
+        const enrollmentsToCreate = [];
+        for (const studentId of studentIds) {
+          for (const targetOfferingId of courseVisibility) {
+            const key = `${studentId}-${targetOfferingId}`;
+            if (!existingKeys.has(key)) {
+              enrollmentsToCreate.push({
+                userId: studentId,
+                courseOfferingId: targetOfferingId,
+                role: COURSE_OFFERING_ROLES.VIEWER,
+                referringCourseId: offeringId,
+              });
+            }
+          }
+        }
+
+        if (enrollmentsToCreate.length > 0) {
+          await prisma.courseOfferingEnrollment.createMany({
+            data: enrollmentsToCreate,
+          });
+        }
+      }
+    }
+  }
+
   return res.status(201).json(createdEnrollments);
 };
 
@@ -182,6 +249,9 @@ export const updateCourseOfferingEnrollment = async (
     throw new NotFoundError('Enrollment not found');
   }
 
+  const wasStudent = existingEnrollment.role === COURSE_OFFERING_ROLES.STUDENT;
+  const willBeStudent = role === COURSE_OFFERING_ROLES.STUDENT;
+
   const updatedEnrollment = await prisma.courseOfferingEnrollment.update({
     where: {
       userId_courseOfferingId: {
@@ -196,6 +266,74 @@ export const updateCourseOfferingEnrollment = async (
       },
     },
   });
+
+  // Handle viewer enrollments based on role change
+  if (wasStudent && !willBeStudent) {
+    // Student role removed - remove viewer enrollments created by this course
+    await prisma.courseOfferingEnrollment.deleteMany({
+      where: {
+        userId: targetUserId,
+        role: COURSE_OFFERING_ROLES.VIEWER,
+        referringCourseId: offeringId,
+      },
+    });
+  } else if (!wasStudent && willBeStudent) {
+    // Student role added - grant viewer enrollments based on course_visibility settings
+    const courseOfferingWithSettings = await prisma.courseOffering.findUnique({
+      where: { id: offeringId },
+      select: { settings: true },
+    });
+
+    if (courseOfferingWithSettings) {
+      const settings =
+        (courseOfferingWithSettings.settings as Record<string, unknown>) || {};
+      const courseVisibility = Array.isArray(
+        settings[CourseOfferingSettingKey.COURSE_VISIBILITY],
+      )
+        ? (settings[CourseOfferingSettingKey.COURSE_VISIBILITY] as number[])
+        : [];
+
+      if (courseVisibility.length > 0) {
+        // Get existing viewer enrollments to avoid duplicates
+        const existingEnrollments =
+          await prisma.courseOfferingEnrollment.findMany({
+            where: {
+              userId: targetUserId,
+              courseOfferingId: { in: courseVisibility },
+              role: COURSE_OFFERING_ROLES.VIEWER,
+            },
+            select: {
+              userId: true,
+              courseOfferingId: true,
+            },
+          });
+
+        const existingKeys = new Set(
+          existingEnrollments.map((e) => `${e.userId}-${e.courseOfferingId}`),
+        );
+
+        // Create new viewer enrollments
+        const enrollmentsToCreate = [];
+        for (const targetOfferingId of courseVisibility) {
+          const key = `${targetUserId}-${targetOfferingId}`;
+          if (!existingKeys.has(key)) {
+            enrollmentsToCreate.push({
+              userId: targetUserId,
+              courseOfferingId: targetOfferingId,
+              role: COURSE_OFFERING_ROLES.VIEWER,
+              referringCourseId: offeringId,
+            });
+          }
+        }
+
+        if (enrollmentsToCreate.length > 0) {
+          await prisma.courseOfferingEnrollment.createMany({
+            data: enrollmentsToCreate,
+          });
+        }
+      }
+    }
+  }
 
   return res.json(updatedEnrollment);
 };
@@ -240,6 +378,9 @@ export const deleteCourseOfferingEnrollment = async (
     throw new NotFoundError('Enrollment not found');
   }
 
+  // If removing a student, also remove viewer enrollments they were given by this course
+  const isStudent = existingEnrollment.role === COURSE_OFFERING_ROLES.STUDENT;
+
   await prisma.courseOfferingEnrollment.delete({
     where: {
       userId_courseOfferingId: {
@@ -248,6 +389,17 @@ export const deleteCourseOfferingEnrollment = async (
       },
     },
   });
+
+  // Remove viewer enrollments that were created by this course offering
+  if (isStudent) {
+    await prisma.courseOfferingEnrollment.deleteMany({
+      where: {
+        userId: targetUserId,
+        role: COURSE_OFFERING_ROLES.VIEWER,
+        referringCourseId: offeringId,
+      },
+    });
+  }
 
   await prisma.teamMembership.deleteMany({
     where: {

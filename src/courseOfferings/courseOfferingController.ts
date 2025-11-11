@@ -9,6 +9,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../utils/AppError.js';
+import { processCourseOfferingSettings } from './courseOfferingSettings.js';
 
 // Helper function to check if user has access to course offering
 const checkCourseOfferingAccess = async (
@@ -228,6 +229,17 @@ export const updateCourseOffering = async (req: Request, res: Response) => {
       );
     }
   }
+
+  // Process settings changes
+  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const newSettings = settings || {};
+  await processCourseOfferingSettings(
+    offeringId,
+    oldSettings,
+    newSettings,
+    userId,
+    isAdmin,
+  );
 
   const updatedOffering = await prisma.courseOffering.update({
     where: { id: offeringId },
