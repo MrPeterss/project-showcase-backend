@@ -38,9 +38,10 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
     throw new UnauthorizedError('Invalid Firebase token');
   }
 
-  if (!firebaseUser.email || !firebaseUser.email.endsWith('@cornell.edu')) {
-    throw new ForbiddenError('Access is restricted to Cornell users.');
-  }
+  // TODO: Uncomment this in prod
+  // if (!firebaseUser.email || !firebaseUser.email.endsWith('@cornell.edu')) {
+  //   throw new ForbiddenError('Access is restricted to Cornell users.');
+  // }
 
   const refreshToken = crypto.randomBytes(64).toString('hex');
 
