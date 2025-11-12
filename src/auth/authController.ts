@@ -51,7 +51,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
     update: { refreshToken, name: firebaseUser.displayName, firebaseId: firebaseUser.uid },
     // If the user does not exist, create a new user
     create: {
-      email: firebaseUser.email,
+      email: firebaseUser.email || 'unknown@unknown.com',
       name: firebaseUser.displayName,
       firebaseId: firebaseUser.uid,
       isAdmin: false,
