@@ -10,6 +10,7 @@ import {
 } from './project.schema.js';
 import {
   deployProject,
+  deployLegacyProjectController,
   getAllImages,
   getProject,
   getProjectLogsController,
@@ -27,6 +28,7 @@ router.get('/images', requireAdmin, getAllImages);
 
 // Project CRUD routes
 router.post('/deploy', validateRequest(deployProjectSchema), deployProject);
+router.post('/deploy-legacy', requireAdmin, validateRequest(deployProjectSchema), deployLegacyProjectController);
 router.get('/', getProjects);
 router.get('/:projectId', getProject);
 router.post(

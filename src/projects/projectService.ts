@@ -76,6 +76,176 @@ export const listAllImages = async () => {
 };
 
 /**
+ * Deploy legacy projects (SP24 and earlier) with Flask backend + MySQL database
+ * This replicates the old docker-compose setup but uses the projects_network
+ */
+export const deployLegacyProject = async (teamId: number, githubUrl: string) => {
+  // Verify team exists
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+  });
+
+  if (!team) {
+    throw new NotFoundError('Team not found');
+  }
+
+  const repoName = extractRepoName(githubUrl);
+  const tempDir = path.join('/tmp', `legacy-project-${Date.now()}-${repoName}`);
+
+  // Create initial project record
+  const project = await prisma.project.create({
+    data: {
+      teamId,
+      githubUrl,
+      imageName: `${repoName}:latest`.toLowerCase(),
+      status: 'building',
+    },
+  });
+
+  try {
+    // Ensure the projects network exists
+    await ensureProjectsNetwork();
+
+    // Clone the repository
+    await git.clone(githubUrl, tempDir);
+
+    // Check for backend directory (required for legacy projects)
+    const backendDockerfilePath = path.join(tempDir, 'backend', 'Dockerfile');
+    if (!fs.existsSync(backendDockerfilePath)) {
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { status: 'failed' },
+      });
+      throw new BadRequestError('Legacy project requires backend/Dockerfile');
+    }
+
+    const buildContext = path.join(tempDir, 'backend');
+
+    // Build the Flask backend image
+    const backendImageName = `${repoName}-backend:latest`.toLowerCase();
+    const stream = await docker.buildImage(
+      {
+        context: buildContext,
+        src: ['.'],
+      },
+      {
+        t: backendImageName,
+      },
+    );
+
+    // Wait for the build to complete
+    await new Promise((resolve, reject) => {
+      docker.modem.followProgress(stream, (err, res) => {
+        if (err) reject(err);
+        else resolve(res);
+      });
+    });
+
+    // Create MySQL database container first
+    const dbContainerName = `${team.name.toLowerCase()}-db`;
+    const dbContainer = await docker.createContainer({
+      Image: 'mysql:latest',
+      name: dbContainerName,
+      Env: [
+        'MYSQL_USER=admin',
+        'MYSQL_PASSWORD=admin',
+        'MYSQL_DATABASE=kardashiandb',
+        'MYSQL_ROOT_PASSWORD=admin',
+      ],
+      HostConfig: {
+        AutoRemove: false,
+        NetworkMode: PROJECTS_NETWORK,
+        Memory: 512 * 1024 * 1024, // 512MB for MySQL
+      },
+      NetworkingConfig: {
+        EndpointsConfig: {
+          [PROJECTS_NETWORK]: {
+            Aliases: [`${team.name.toLowerCase()}-db`],
+          },
+        },
+      },
+    });
+
+    await dbContainer.start();
+
+    // Wait a bit for MySQL to initialize
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    // Create Flask backend container
+    const backendContainerName = `${team.name.toLowerCase()}-backend`;
+    const backendContainer = await docker.createContainer({
+      Image: backendImageName,
+      name: backendContainerName,
+      Env: [
+        `DB_NAME=${team.name.toLowerCase()}_db`,
+      ],
+      Cmd: ['flask', 'run', '--host=0.0.0.0', '--port=5000'],
+      HostConfig: {
+        AutoRemove: false,
+        NetworkMode: PROJECTS_NETWORK,
+        Memory: 800 * 1024 * 1024, // 800MB for Flask
+      },
+      NetworkingConfig: {
+        EndpointsConfig: {
+          [PROJECTS_NETWORK]: {
+            Aliases: [`${team.name.toLowerCase()}-backend`],
+          },
+        },
+      },
+    });
+
+    await backendContainer.start();
+
+    // Get container info
+    const backendInfo = await backendContainer.inspect();
+    const dbInfo = await dbContainer.inspect();
+
+    // Update project with container information
+    const updatedProject = await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        containerId: backendContainer.id,
+        containerName: backendInfo.Name,
+        status: 'running',
+        ports: backendInfo.NetworkSettings.Ports,
+        deployedAt: new Date(),
+      },
+      include: {
+        team: true,
+      },
+    });
+
+    return {
+      success: true,
+      project: updatedProject,
+      backend: {
+        imageName: backendImageName,
+        containerId: backendContainer.id,
+        containerName: backendInfo.Name,
+        state: backendInfo.State,
+      },
+      database: {
+        containerId: dbContainer.id,
+        containerName: dbInfo.Name,
+        state: dbInfo.State,
+      },
+    };
+  } catch (error) {
+    // Update project status to failed
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { status: 'failed' },
+    });
+    throw error;
+  } finally {
+    // Clean up the temporary directory
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }
+};
+
+/**
  * Clone a GitHub repository, build a Docker image from it, and run a container
  */
 export const deploy = async (teamId: number, githubUrl: string) => {

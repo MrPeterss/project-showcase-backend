@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import {
   deploy,
+  deployLegacyProject,
   getAllProjects,
   getProjectById,
   getProjectLogs,
@@ -28,6 +29,17 @@ export const deployProject = async (req: Request, res: Response) => {
 
   return res.status(201).json({
     message: 'Project deployed successfully',
+    ...result,
+  });
+};
+
+export const deployLegacyProjectController = async (req: Request, res: Response) => {
+  const { teamId, githubUrl } = req.body;
+
+  const result = await deployLegacyProject(teamId, githubUrl);
+
+  return res.status(201).json({
+    message: 'Legacy project deployed successfully',
     ...result,
   });
 };
