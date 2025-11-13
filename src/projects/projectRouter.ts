@@ -1,6 +1,5 @@
 import { Router } from 'express';
 
-import { requireAdmin } from '../middleware/authentication.js';
 import { validateRequest } from '../middleware/validateRequest.js';
 import {
   deployProjectSchema,
