@@ -113,11 +113,13 @@ export const deploy = async (teamId: number, githubUrl: string) => {
     const rootDockerfilePath = path.join(tempDir, 'Dockerfile');
     
     let buildContext = tempDir;
+    let isBackendProject = false;
     
     // This is to support SP24 projects which have a backend directory
     if (fs.existsSync(backendDockerfilePath)) {
       // Use backend directory if it has a Dockerfile
       buildContext = path.join(tempDir, 'backend');
+      isBackendProject = true;
     } else if (!fs.existsSync(rootDockerfilePath)) {
       await prisma.project.update({
         where: { id: project.id },
@@ -146,8 +148,8 @@ export const deploy = async (teamId: number, githubUrl: string) => {
       });
     });
 
-    // Run the container
-    const container = await docker.createContainer({
+    // Run the container with appropriate startup command
+    const containerConfig: any = {
       Image: imageName,
       name: `${repoName}-${Date.now()}`,
       HostConfig: {
@@ -162,7 +164,14 @@ export const deploy = async (teamId: number, githubUrl: string) => {
           },
         },
       },
-    });
+    };
+
+    // Override startup command for backend directory projects (SP24 Flask apps)
+    if (isBackendProject) {
+      containerConfig.Cmd = ['flask', 'run', '--host=0.0.0.0', '--port=5000'];
+    }
+
+    const container = await docker.createContainer(containerConfig);
 
     await container.start();
 
