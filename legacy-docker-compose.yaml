@@ -1,0 +1,38 @@
+version: '3.8'
+services:
+    backend_flask_app:
+        container_name: ${TEAM_NAME}_backend_app
+        restart: always
+        build:
+                context: ./backend
+                dockerfile: Dockerfile
+        depends_on:
+                - db
+        environment:
+                - DB_NAME=${TEAM_NAME}_db
+        networks:
+                projects_network:
+                        aliases:
+                                - ${TEAM_NAME}_backend
+        command: flask run --host=0.0.0.0 --port=5000
+    db:
+        container_name: ${TEAM_NAME}_db
+        image: mysql:latest
+        restart: always
+        environment:
+                - MYSQL_USER=admin
+                - MYSQL_PASSWORD=admin
+                - MYSQL_DATABASE=kardashiandb
+                - MYSQL_ROOT_PASSWORD=admin
+        volumes:
+                - flask_volume:/var/lib/mysql
+                - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+        networks:
+                projects_network:
+                        aliases:
+                                - ${TEAM_NAME}_db
+volumes:
+        flask_volume:
+networks:
+        projects_network:
+                external: true

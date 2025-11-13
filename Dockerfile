@@ -32,8 +32,13 @@ RUN npx tsc prisma/seed.ts --outDir dist/prisma --target ES2020 --moduleResoluti
 # Production stage
 FROM node:24-slim
 
-# Install openssl for Prisma and git for repository cloning
-RUN apt-get update -y && apt-get install -y openssl git && rm -rf /var/lib/apt/lists/*
+# Install openssl for Prisma, git for repository cloning, curl for docker-compose installation
+RUN apt-get update -y && apt-get install -y openssl git curl && rm -rf /var/lib/apt/lists/*
+
+# Install docker-compose (latest version)
+RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose \
+  && chmod +x /usr/local/bin/docker-compose \
+  && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
 WORKDIR /app
 

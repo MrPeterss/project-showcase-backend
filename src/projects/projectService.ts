@@ -1,10 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import { docker } from '../docker.js';
 import { git } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
+
+const execAsync = promisify(exec);
 
 const PROJECTS_NETWORK = 'projects_network';
 
@@ -77,7 +81,7 @@ export const listAllImages = async () => {
 
 /**
  * Deploy legacy projects (SP25 and earlier) with Flask backend + MySQL database
- * This replicates the old docker-compose setup but uses the projects_network
+ * Uses docker-compose with the projects_network
  */
 export const deployLegacyProject = async (teamId: number, githubUrl: string) => {
   // Verify team exists
@@ -119,158 +123,91 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
       throw new BadRequestError('Legacy project requires backend/Dockerfile');
     }
 
-    const buildContext = path.join(tempDir, 'backend');
+    // Copy the legacy docker-compose.yaml to the temp directory
+    const legacyComposePath = path.join(process.cwd(), 'legacy-docker-compose.yaml');
+    const targetComposePath = path.join(tempDir, 'docker-compose.yaml');
+    
+    if (!fs.existsSync(legacyComposePath)) {
+      throw new BadRequestError('Legacy docker-compose.yaml not found');
+    }
+    
+    fs.copyFileSync(legacyComposePath, targetComposePath);
 
-    // Build the Flask backend image
-    const backendImageName = `${repoName}-backend:latest`.toLowerCase();
-    const stream = await docker.buildImage(
-      {
-        context: buildContext,
-        src: ['.'],
-      },
-      {
-        t: backendImageName,
-      },
-    );
-
-    // Wait for the build to complete
-    await new Promise((resolve, reject) => {
-      docker.modem.followProgress(stream, (err, res) => {
-        if (err) reject(err);
-        else resolve(res);
+    // Stop and remove existing containers if they exist
+    const teamName = team.name.toLowerCase();
+    try {
+      await execAsync(`docker-compose -f ${targetComposePath} down`, {
+        cwd: tempDir,
+        env: {
+          ...process.env,
+          TEAM_NAME: teamName,
+        },
       });
-    });
-
-    // Remove existing containers if they exist
-    const dbContainerName = `${team.name.toLowerCase()}-db`;
-    const backendContainerName = `${team.name.toLowerCase()}-backend`;
-    
-    // Check and remove existing database container
-    try {
-      const existingDbContainer = docker.getContainer(dbContainerName);
-      try {
-        await existingDbContainer.stop();
-      } catch (stopError) {
-        // Container might already be stopped, continue to remove
-      }
-      await existingDbContainer.remove();
     } catch (error) {
-      // Container doesn't exist, continue
+      // Containers might not exist, continue
     }
-    
-    // Check and remove existing backend container
+
+    // Deploy using docker-compose
+    const { stdout, stderr } = await execAsync(`docker-compose -f ${targetComposePath} up -d --build`, {
+      cwd: tempDir,
+      env: {
+        ...process.env,
+        TEAM_NAME: teamName,
+      },
+    });
+
+    console.log('Docker-compose output:', stdout);
+    if (stderr) {
+      console.log('Docker-compose stderr:', stderr);
+    }
+
+    // Get container information
+    const backendContainerName = `${teamName}_backend_app`;
+    const dbContainerName = `${teamName}_db`;
+
+    // Wait a bit for containers to start
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
+    let backendContainer, dbContainer;
     try {
-      const existingBackendContainer = docker.getContainer(backendContainerName);
-      try {
-        await existingBackendContainer.stop();
-      } catch (stopError) {
-        // Container might already be stopped, continue to remove
-      }
-      await existingBackendContainer.remove();
-    } catch (error) {
-      // Container doesn't exist, continue
+      backendContainer = docker.getContainer(backendContainerName);
+      dbContainer = docker.getContainer(dbContainerName);
+      
+      const backendInfo = await backendContainer.inspect();
+      const dbInfo = await dbContainer.inspect();
+
+      // Update project with container information
+      const updatedProject = await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          containerId: backendContainer.id,
+          containerName: backendInfo.Name,
+          status: 'running',
+          ports: backendInfo.NetworkSettings.Ports,
+          deployedAt: new Date(),
+        },
+        include: {
+          team: true,
+        },
+      });
+
+      return {
+        success: true,
+        project: updatedProject,
+        backend: {
+          containerId: backendContainer.id,
+          containerName: backendInfo.Name,
+          state: backendInfo.State,
+        },
+        database: {
+          containerId: dbContainer.id,
+          containerName: dbInfo.Name,
+          state: dbInfo.State,
+        },
+      };
+    } catch (inspectError) {
+      throw new Error(`Failed to inspect containers: ${inspectError}`);
     }
-
-    // Check if init.sql exists in the repository
-    const initSqlPath = path.join(tempDir, 'init.sql');
-    const binds = [];
-    
-    if (fs.existsSync(initSqlPath)) {
-      // Mount init.sql to MySQL's initialization directory
-      binds.push(`${initSqlPath}:/docker-entrypoint-initdb.d/init.sql:ro`);
-    }
-
-    // Create MySQL database container
-    const dbContainer = await docker.createContainer({
-      Image: 'mysql:latest',
-      name: dbContainerName,
-      Env: [
-        'MYSQL_USER=admin',
-        'MYSQL_PASSWORD=admin',
-        'MYSQL_DATABASE=kardashiandb',
-        'MYSQL_ROOT_PASSWORD=admin',
-      ],
-      HostConfig: {
-        AutoRemove: false,
-        NetworkMode: PROJECTS_NETWORK,
-        Memory: 512 * 1024 * 1024, // 512MB for MySQL
-        Binds: binds,
-      },
-      NetworkingConfig: {
-        EndpointsConfig: {
-          [PROJECTS_NETWORK]: {
-            Aliases: [`${team.name.toLowerCase()}-db`],
-          },
-        },
-      },
-    });
-
-    await dbContainer.start();
-
-    // Wait a bit for MySQL to initialize
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // Create Flask backend container
-    const backendContainer = await docker.createContainer({
-      Image: backendImageName,
-      name: backendContainerName,
-      Env: [
-        `DB_NAME=${team.name.toLowerCase()}-db`,
-      ],
-      Cmd: ['flask', 'run', '--host=0.0.0.0', '--port=5000'],
-      HostConfig: {
-        AutoRemove: false,
-        NetworkMode: PROJECTS_NETWORK,
-        Memory: 800 * 1024 * 1024, // 800MB for Flask
-        RestartPolicy: {
-          Name: 'always',
-        },
-      },
-      NetworkingConfig: {
-        EndpointsConfig: {
-          [PROJECTS_NETWORK]: {
-            Aliases: [`${team.name.toLowerCase()}-backend`],
-          },
-        },
-      },
-    });
-
-    await backendContainer.start();
-
-    // Get container info
-    const backendInfo = await backendContainer.inspect();
-    const dbInfo = await dbContainer.inspect();
-
-    // Update project with container information
-    const updatedProject = await prisma.project.update({
-      where: { id: project.id },
-      data: {
-        containerId: backendContainer.id,
-        containerName: backendInfo.Name,
-        status: 'running',
-        ports: backendInfo.NetworkSettings.Ports,
-        deployedAt: new Date(),
-      },
-      include: {
-        team: true,
-      },
-    });
-
-    return {
-      success: true,
-      project: updatedProject,
-      backend: {
-        imageName: backendImageName,
-        containerId: backendContainer.id,
-        containerName: backendInfo.Name,
-        state: backendInfo.State,
-      },
-      database: {
-        containerId: dbContainer.id,
-        containerName: dbInfo.Name,
-        state: dbInfo.State,
-      },
-    };
   } catch (error) {
     // Update project status to failed
     await prisma.project.update({
