@@ -148,19 +148,27 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
     // Check and remove existing database container
     try {
       const existingDbContainer = docker.getContainer(dbContainerName);
-      await existingDbContainer.stop();
+      try {
+        await existingDbContainer.stop();
+      } catch (stopError) {
+        // Container might already be stopped, continue to remove
+      }
       await existingDbContainer.remove();
     } catch (error) {
-      // Container doesn't exist or already stopped, continue
+      // Container doesn't exist, continue
     }
     
     // Check and remove existing backend container
     try {
       const existingBackendContainer = docker.getContainer(backendContainerName);
-      await existingBackendContainer.stop();
+      try {
+        await existingBackendContainer.stop();
+      } catch (stopError) {
+        // Container might already be stopped, continue to remove
+      }
       await existingBackendContainer.remove();
     } catch (error) {
-      // Container doesn't exist or already stopped, continue
+      // Container doesn't exist, continue
     }
 
     // Create MySQL database container
