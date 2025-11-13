@@ -142,7 +142,7 @@ export const createTeam = async (req: Request, res: Response) => {
   // Check if team name already exists
   const existingTeam = await prisma.team.findFirst({
     where: {
-      name
+      name,
     },
   });
 
@@ -535,7 +535,7 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
 
   // Get teams the user is a member of in this specific course offering
   const teamMemberships = await prisma.teamMembership.findMany({
-    where: { 
+    where: {
       userId,
       team: {
         courseOfferingId: offeringId,

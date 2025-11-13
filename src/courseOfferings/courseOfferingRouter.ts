@@ -17,7 +17,11 @@ import {
   courseOfferingTeamsParamsSchema,
   createTeamSchema,
 } from '../teams/team.schema.js';
-import { createTeam, getCourseOfferingTeams, getMyTeamsInOffering } from '../teams/teamController.js';
+import {
+  createTeam,
+  getCourseOfferingTeams,
+  getMyTeamsInOffering,
+} from '../teams/teamController.js';
 import {
   courseOfferingParamsSchema,
   courseOfferingQuerySchema,

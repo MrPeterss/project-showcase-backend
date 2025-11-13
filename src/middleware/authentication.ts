@@ -10,6 +10,15 @@ export const requireAuth = (
   _res: Response,
   next: NextFunction,
 ) => {
+  // Development bypass
+  if (process.env.NODE_ENV === 'development') {
+    req.user = {
+      userId: 1,
+      isAdmin: true,
+    };
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new UnauthorizedError('No token provided or wrong format.');
