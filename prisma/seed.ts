@@ -5,10 +5,10 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 
+// Seed admin users from ADMIN_EMAILS environment variable
 async function main() {
   console.log('Starting seed...');
 
-  // Get admin emails from environment variable
   const adminEmailsEnv = process.env.ADMIN_EMAILS || '';
   const adminEmails = adminEmailsEnv
     .split(',')
@@ -23,7 +23,6 @@ async function main() {
 
   console.log(`Found ${adminEmails.length} admin email(s) to seed.`);
 
-  // Seed admin users
   for (const email of adminEmails) {
     try {
       const existingUser = await prisma.user.findUnique({
@@ -48,7 +47,7 @@ async function main() {
         data: {
           email,
           isAdmin: true,
-          // firebaseId and teamId are null until the user logs in
+          // name, firebaseId, refreshToken, and teamId are null until the user logs in
         },
       });
 

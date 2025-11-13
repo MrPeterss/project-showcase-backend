@@ -186,7 +186,7 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
           TEAM_NAME: teamName,
         },
       });
-    } catch (error) {
+    } catch {
       // Containers might not exist, continue
     }
 
