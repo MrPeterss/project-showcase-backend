@@ -18,8 +18,8 @@ router.get('/audit-logs', (_req, res) => {
 });
 
 // Docker info routes
-router.get('/containers', getRunningContainers);
-router.get('/images', getAllImages);
+router.get('/projects/containers', getRunningContainers);
+router.get('/projects/images', getAllImages);
 
 // User admin management routes
 router.post('/users/:userId/promote', promoteUser);
