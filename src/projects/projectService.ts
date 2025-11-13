@@ -256,31 +256,11 @@ export const deploy = async (teamId: number, githubUrl: string) => {
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
-    // Check for Dockerfile in backend directory first, then root
-    const backendDockerfilePath = path.join(tempDir, 'backend', 'Dockerfile');
-    const rootDockerfilePath = path.join(tempDir, 'Dockerfile');
-    
-    let buildContext = tempDir;
-    let isBackendProject = false;
-    
-    // This is to support SP24 projects which have a backend directory
-    if (fs.existsSync(backendDockerfilePath)) {
-      // Use backend directory if it has a Dockerfile
-      buildContext = path.join(tempDir, 'backend');
-      isBackendProject = true;
-    } else if (!fs.existsSync(rootDockerfilePath)) {
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { status: 'failed' },
-      });
-      throw new BadRequestError('No Dockerfile found in the repository');
-    }
-
     // Build the image
     const imageName = `${repoName}:latest`.toLowerCase();
     const stream = await docker.buildImage(
       {
-        context: buildContext,
+        context: tempDir,
         src: ['.'],
       },
       {
@@ -299,7 +279,7 @@ export const deploy = async (teamId: number, githubUrl: string) => {
     // Run the container with appropriate startup command
     const containerConfig: any = {
       Image: imageName,
-      name: `${repoName}-${Date.now()}`,
+      name: `${team.name.toLowerCase()}`,
       HostConfig: {
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
@@ -313,11 +293,6 @@ export const deploy = async (teamId: number, githubUrl: string) => {
         },
       },
     };
-
-    // Override startup command for backend directory projects (SP24 Flask apps)
-    if (isBackendProject) {
-      containerConfig.Cmd = ['flask', 'run', '--host=0.0.0.0', '--port=5000'];
-    }
 
     const container = await docker.createContainer(containerConfig);
 
