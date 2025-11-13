@@ -72,7 +72,8 @@ model Team {
   CourseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])
   courseOfferingId Int
 
-  members TeamMembership[]
+  members  TeamMembership[]
+  projects Project[]
 }
 
 model CourseOfferingEnrollment {
@@ -97,4 +98,19 @@ model TeamMembership {
   @@id([userId, teamId])
 }
 
-// Add deployments table
+model Project {
+  id            Int       @id @default(autoincrement())
+  githubUrl     String
+  imageName     String
+  containerId   String?   @unique
+  containerName String?
+  status        String    // running, stopped, failed, etc.
+  ports         Json?     // Store port mappings as JSON
+  deployedAt    DateTime  @default(now())
+  stoppedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  team   Team @relation(fields: [teamId], references: [id])
+  teamId Int
+}
