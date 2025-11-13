@@ -107,43 +107,47 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
   });
 
   try {
-    // Check if team has an active project and stop/remove existing container
-    const existingProject = await prisma.project.findFirst({
-      where: {
-        teamId,
-        status: 'running',
-      },
-    });
+    // Stop and remove existing containers with the same names if they exist
+    const teamName = team.name.toLowerCase();
+    const backendContainerName = `${teamName}_backend_app`;
+    const dbContainerName = `${teamName}_db`;
+    
+    // First try-catch: Stop existing containers
+    try {
+      const backendContainer = docker.getContainer(backendContainerName);
+      await backendContainer.stop();
+      console.log(`Stopped existing backend container: ${backendContainerName}`);
+    } catch (stopError) {
+      console.log(`Failed to stop backend container ${backendContainerName}:`, stopError);
+      // Continue even if stop fails - container might not exist or already be stopped
+    }
 
-    if (existingProject && existingProject.containerId) {
-      // First try-catch: Stop the existing container
-      try {
-        const existingContainer = docker.getContainer(existingProject.containerId);
-        await existingContainer.stop();
-        console.log(`Stopped existing legacy container: ${existingProject.containerId}`);
-      } catch (stopError) {
-        console.log(`Failed to stop legacy container ${existingProject.containerId}:`, stopError);
-        // Continue even if stop fails - container might already be stopped
-      }
+    try {
+      const dbContainer = docker.getContainer(dbContainerName);
+      await dbContainer.stop();
+      console.log(`Stopped existing db container: ${dbContainerName}`);
+    } catch (stopError) {
+      console.log(`Failed to stop db container ${dbContainerName}:`, stopError);
+      // Continue even if stop fails - container might not exist or already be stopped
+    }
 
-      // Second try-catch: Remove the existing container
-      try {
-        const existingContainer = docker.getContainer(existingProject.containerId);
-        await existingContainer.remove();
-        console.log(`Removed existing legacy container: ${existingProject.containerId}`);
-        
-        // Update the existing project status
-        await prisma.project.update({
-          where: { id: existingProject.id },
-          data: {
-            status: 'stopped',
-            stoppedAt: new Date(),
-          },
-        });
-      } catch (removeError) {
-        console.log(`Failed to remove legacy container ${existingProject.containerId}:`, removeError);
-        // Continue even if remove fails - we'll create a new container anyway
-      }
+    // Second try-catch: Remove existing containers
+    try {
+      const backendContainer = docker.getContainer(backendContainerName);
+      await backendContainer.remove();
+      console.log(`Removed existing backend container: ${backendContainerName}`);
+    } catch (removeError) {
+      console.log(`Failed to remove backend container ${backendContainerName}:`, removeError);
+      // Continue even if remove fails - we'll create new containers anyway
+    }
+
+    try {
+      const dbContainer = docker.getContainer(dbContainerName);
+      await dbContainer.remove();
+      console.log(`Removed existing db container: ${dbContainerName}`);
+    } catch (removeError) {
+      console.log(`Failed to remove db container ${dbContainerName}:`, removeError);
+      // Continue even if remove fails - we'll create new containers anyway
     }
 
     // Ensure the projects network exists
@@ -289,43 +293,27 @@ export const deploy = async (teamId: number, githubUrl: string) => {
   });
 
   try {
-    // Check if team has an active project and stop/remove existing container
-    const existingProject = await prisma.project.findFirst({
-      where: {
-        teamId,
-        status: 'running',
-      },
-    });
+    // Stop and remove existing container with the same name if it exists
+    const containerName = team.name.toLowerCase();
+    
+    // First try-catch: Stop the existing container
+    try {
+      const existingContainer = docker.getContainer(containerName);
+      await existingContainer.stop();
+      console.log(`Stopped existing container: ${containerName}`);
+    } catch (stopError) {
+      console.log(`Failed to stop container ${containerName}:`, stopError);
+      // Continue even if stop fails - container might not exist or already be stopped
+    }
 
-    if (existingProject && existingProject.containerId) {
-      // First try-catch: Stop the existing container
-      try {
-        const existingContainer = docker.getContainer(existingProject.containerId);
-        await existingContainer.stop();
-        console.log(`Stopped existing container: ${existingProject.containerId}`);
-      } catch (stopError) {
-        console.log(`Failed to stop container ${existingProject.containerId}:`, stopError);
-        // Continue even if stop fails - container might already be stopped
-      }
-
-      // Second try-catch: Remove the existing container
-      try {
-        const existingContainer = docker.getContainer(existingProject.containerId);
-        await existingContainer.remove();
-        console.log(`Removed existing container: ${existingProject.containerId}`);
-        
-        // Update the existing project status
-        await prisma.project.update({
-          where: { id: existingProject.id },
-          data: {
-            status: 'stopped',
-            stoppedAt: new Date(),
-          },
-        });
-      } catch (removeError) {
-        console.log(`Failed to remove container ${existingProject.containerId}:`, removeError);
-        // Continue even if remove fails - we'll create a new container anyway
-      }
+    // Second try-catch: Remove the existing container
+    try {
+      const existingContainer = docker.getContainer(containerName);
+      await existingContainer.remove();
+      console.log(`Removed existing container: ${containerName}`);
+    } catch (removeError) {
+      console.log(`Failed to remove container ${containerName}:`, removeError);
+      // Continue even if remove fails - we'll create a new container anyway
     }
 
     // Ensure the projects network exists
