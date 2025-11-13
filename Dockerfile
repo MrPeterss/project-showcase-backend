@@ -60,6 +60,9 @@ RUN npx prisma generate
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Copy legacy docker-compose file for legacy deployments
+COPY legacy-docker-compose.yaml ./legacy-docker-compose.yaml
+
 # Create directory for SQLite database
 RUN mkdir -p /app/data
 
