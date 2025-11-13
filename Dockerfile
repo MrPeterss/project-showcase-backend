@@ -32,8 +32,8 @@ RUN npx tsc prisma/seed.ts --outDir dist/prisma --target ES2020 --moduleResoluti
 # Production stage
 FROM node:24-slim
 
-# Install openssl for Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install openssl for Prisma and git for repository cloning
+RUN apt-get update -y && apt-get install -y openssl git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
