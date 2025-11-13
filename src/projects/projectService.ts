@@ -177,7 +177,7 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
       Image: backendImageName,
       name: backendContainerName,
       Env: [
-        `DB_NAME=${team.name.toLowerCase()}_db`,
+        `DB_NAME=${team.name.toLowerCase()}-db`,
       ],
       Cmd: ['flask', 'run', '--host=0.0.0.0', '--port=5000'],
       HostConfig: {
