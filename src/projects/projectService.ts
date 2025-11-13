@@ -76,7 +76,7 @@ export const listAllImages = async () => {
 };
 
 /**
- * Deploy legacy projects (SP24 and earlier) with Flask backend + MySQL database
+ * Deploy legacy projects (SP25 and earlier) with Flask backend + MySQL database
  * This replicates the old docker-compose setup but uses the projects_network
  */
 export const deployLegacyProject = async (teamId: number, githubUrl: string) => {
@@ -171,6 +171,15 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
       // Container doesn't exist, continue
     }
 
+    // Check if init.sql exists in the repository
+    const initSqlPath = path.join(tempDir, 'init.sql');
+    const binds = [];
+    
+    if (fs.existsSync(initSqlPath)) {
+      // Mount init.sql to MySQL's initialization directory
+      binds.push(`${initSqlPath}:/docker-entrypoint-initdb.d/init.sql:ro`);
+    }
+
     // Create MySQL database container
     const dbContainer = await docker.createContainer({
       Image: 'mysql:latest',
@@ -185,6 +194,7 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 512 * 1024 * 1024, // 512MB for MySQL
+        Binds: binds,
       },
       NetworkingConfig: {
         EndpointsConfig: {
