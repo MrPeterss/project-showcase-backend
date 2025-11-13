@@ -108,9 +108,17 @@ export const deploy = async (teamId: number, githubUrl: string) => {
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
-    // Check if Dockerfile exists
-    const dockerfilePath = path.join(tempDir, 'Dockerfile');
-    if (!fs.existsSync(dockerfilePath)) {
+    // Check for Dockerfile in backend directory first, then root
+    const backendDockerfilePath = path.join(tempDir, 'backend', 'Dockerfile');
+    const rootDockerfilePath = path.join(tempDir, 'Dockerfile');
+    
+    let buildContext = tempDir;
+    
+    // This is to support SP24 projects which have a backend directory
+    if (fs.existsSync(backendDockerfilePath)) {
+      // Use backend directory if it has a Dockerfile
+      buildContext = path.join(tempDir, 'backend');
+    } else if (!fs.existsSync(rootDockerfilePath)) {
       await prisma.project.update({
         where: { id: project.id },
         data: { status: 'failed' },
@@ -122,7 +130,7 @@ export const deploy = async (teamId: number, githubUrl: string) => {
     const imageName = `${repoName}:latest`.toLowerCase();
     const stream = await docker.buildImage(
       {
-        context: tempDir,
+        context: buildContext,
         src: ['.'],
       },
       {
