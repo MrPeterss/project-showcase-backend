@@ -212,6 +212,9 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB for Flask
+        RestartPolicy: {
+          Name: 'always',
+        },
       },
       NetworkingConfig: {
         EndpointsConfig: {
