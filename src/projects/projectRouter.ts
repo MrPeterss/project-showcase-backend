@@ -10,20 +10,14 @@ import {
 } from './project.schema.js';
 import {
   deployProject,
-  getAllImages,
   getProject,
   getProjectLogsController,
   getProjects,
-  getRunningContainers,
   getTeamProjectsController,
   stopProjectController,
 } from './projectController.js';
 
 const router = Router();
-
-// Docker info routes (admin only)
-router.get('/containers', requireAdmin, getRunningContainers);
-router.get('/images', requireAdmin, getAllImages);
 
 // Project CRUD routes
 router.post('/deploy', validateRequest(deployProjectSchema), deployProject);
