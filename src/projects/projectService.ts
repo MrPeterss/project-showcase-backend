@@ -250,6 +250,45 @@ export const deploy = async (teamId: number, githubUrl: string) => {
   });
 
   try {
+    // Check if team has an active project and stop/remove existing container
+    const existingProject = await prisma.project.findFirst({
+      where: {
+        teamId,
+        status: 'running',
+      },
+    });
+
+    if (existingProject && existingProject.containerId) {
+      // First try-catch: Stop the existing container
+      try {
+        const existingContainer = docker.getContainer(existingProject.containerId);
+        await existingContainer.stop();
+        console.log(`Stopped existing container: ${existingProject.containerId}`);
+      } catch (stopError) {
+        console.log(`Failed to stop container ${existingProject.containerId}:`, stopError);
+        // Continue even if stop fails - container might already be stopped
+      }
+
+      // Second try-catch: Remove the existing container
+      try {
+        const existingContainer = docker.getContainer(existingProject.containerId);
+        await existingContainer.remove();
+        console.log(`Removed existing container: ${existingProject.containerId}`);
+        
+        // Update the existing project status
+        await prisma.project.update({
+          where: { id: existingProject.id },
+          data: {
+            status: 'stopped',
+            stoppedAt: new Date(),
+          },
+        });
+      } catch (removeError) {
+        console.log(`Failed to remove container ${existingProject.containerId}:`, removeError);
+        // Continue even if remove fails - we'll create a new container anyway
+      }
+    }
+
     // Ensure the projects network exists
     await ensureProjectsNetwork();
 
