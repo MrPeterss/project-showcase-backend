@@ -141,8 +141,29 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
       });
     });
 
-    // Create MySQL database container first
+    // Remove existing containers if they exist
     const dbContainerName = `${team.name.toLowerCase()}-db`;
+    const backendContainerName = `${team.name.toLowerCase()}-backend`;
+    
+    // Check and remove existing database container
+    try {
+      const existingDbContainer = docker.getContainer(dbContainerName);
+      await existingDbContainer.stop();
+      await existingDbContainer.remove();
+    } catch (error) {
+      // Container doesn't exist or already stopped, continue
+    }
+    
+    // Check and remove existing backend container
+    try {
+      const existingBackendContainer = docker.getContainer(backendContainerName);
+      await existingBackendContainer.stop();
+      await existingBackendContainer.remove();
+    } catch (error) {
+      // Container doesn't exist or already stopped, continue
+    }
+
+    // Create MySQL database container
     const dbContainer = await docker.createContainer({
       Image: 'mysql:latest',
       name: dbContainerName,
@@ -172,7 +193,6 @@ export const deployLegacyProject = async (teamId: number, githubUrl: string) => 
     await new Promise(resolve => setTimeout(resolve, 5000));
 
     // Create Flask backend container
-    const backendContainerName = `${team.name.toLowerCase()}-backend`;
     const backendContainer = await docker.createContainer({
       Image: backendImageName,
       name: backendContainerName,
