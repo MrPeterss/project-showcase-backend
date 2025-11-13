@@ -6,6 +6,8 @@ import { git } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
+const PROJECTS_NETWORK = 'projects_network';
+
 /**
  * Extract repository name from GitHub URL
  */
@@ -15,6 +17,31 @@ const extractRepoName = (githubUrl: string): string => {
     throw new Error('Invalid GitHub URL');
   }
   return match[1].replace('.git', '');
+};
+
+/**
+ * Ensure the projects network exists, create it if it doesn't
+ */
+const ensureProjectsNetwork = async (): Promise<void> => {
+  try {
+    // Try to inspect the network to see if it exists
+    await docker.getNetwork(PROJECTS_NETWORK).inspect();
+  } catch (error) {
+    // Network doesn't exist, create it
+    if ((error as { statusCode?: number }).statusCode === 404) {
+      await docker.createNetwork({
+        Name: PROJECTS_NETWORK,
+        Driver: 'bridge',
+        Internal: false,
+        Attachable: true,
+        IPAM: {
+          Driver: 'default',
+        },
+      });
+    } else {
+      throw error;
+    }
+  }
 };
 
 /**
@@ -75,6 +102,9 @@ export const deploy = async (teamId: number, githubUrl: string) => {
   });
 
   try {
+    // Ensure the projects network exists
+    await ensureProjectsNetwork();
+
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
@@ -114,7 +144,15 @@ export const deploy = async (teamId: number, githubUrl: string) => {
       name: `${repoName}-${Date.now()}`,
       HostConfig: {
         AutoRemove: false,
-        PublishAllPorts: true,
+        NetworkMode: PROJECTS_NETWORK,
+        Memory: 800 * 1024 * 1024, // 800MB
+      },
+      NetworkingConfig: {
+        EndpointsConfig: {
+          [PROJECTS_NETWORK]: {
+            Aliases: [team.name.toLowerCase()],
+          },
+        },
       },
     });
 
