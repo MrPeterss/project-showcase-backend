@@ -1,24 +1,28 @@
 import { Router } from 'express';
 
-import { requireAdmin } from '../middleware/authentication.js';
 import { getAllImages, getRunningContainers } from '../projects/projectController.js';
+import { demoteUser, promoteUser } from './adminController.js';
 
 const router = Router();
 
-router.get('/stats', requireAdmin, (_req, res) => {
+router.get('/stats', (_req, res) => {
   res.json({ message: 'Admin stats endpoint' });
 });
 
-router.get('/settings', requireAdmin, (_req, res) => {
+router.get('/settings', (_req, res) => {
   res.json({ message: 'Admin settings endpoint' });
 });
 
-router.get('/audit-logs', requireAdmin, (_req, res) => {
+router.get('/audit-logs', (_req, res) => {
   res.json({ message: 'Admin audit logs endpoint' });
 });
 
 // Docker info routes
-router.get('/containers', requireAdmin, getRunningContainers);
-router.get('/images', requireAdmin, getAllImages);
+router.get('/containers', getRunningContainers);
+router.get('/images', getAllImages);
+
+// User admin management routes
+router.post('/users/:userId/promote', promoteUser);
+router.post('/users/:userId/demote', demoteUser);
 
 export default router;

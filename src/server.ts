@@ -10,7 +10,7 @@ import authRouter from './auth/authRouter.js';
 import courseOfferingRouter from './courseOfferings/courseOfferingRouter.js';
 import courseRouter from './courses/courseRouter.js';
 import enrollmentRouter from './enrollment/enrollmentRouter.js';
-import { requireAuth } from './middleware/authentication.js';
+import { requireAdmin, requireAuth } from './middleware/authentication.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { userRateLimiter } from './middleware/rateLimit.js';
@@ -60,7 +60,7 @@ router.use('/auth', authRouter);
 // Protected routes (require authentication)
 router.use(requireAuth);
 router.use(userRateLimiter);
-router.use('/admin', adminRouter);
+router.use('/admin', requireAdmin, adminRouter);
 router.use('/users', userRouter);
 router.use('/semesters', semesterRouter);
 router.use('/teams', teamRouter);
