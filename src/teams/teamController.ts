@@ -73,6 +73,29 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
           },
         },
       },
+      projects: {
+        where: { status: 'running' },
+        orderBy: { deployedAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          githubUrl: true,
+          imageName: true,
+          containerId: true,
+          containerName: true,
+          status: true,
+          ports: true,
+          deployedAt: true,
+          stoppedAt: true,
+          deployedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -95,6 +118,29 @@ export const getTeam = async (req: Request, res: Response) => {
         },
       },
       CourseOffering: true,
+      projects: {
+        where: { status: 'running' },
+        orderBy: { deployedAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          githubUrl: true,
+          imageName: true,
+          containerId: true,
+          containerName: true,
+          status: true,
+          ports: true,
+          deployedAt: true,
+          stoppedAt: true,
+          deployedBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -549,6 +595,21 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
               user: {
                 select: { id: true, name: true, email: true },
               },
+            },
+          },
+          projects: {
+            orderBy: { deployedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              githubUrl: true,
+              imageName: true,
+              containerId: true,
+              containerName: true,
+              status: true,
+              ports: true,
+              deployedAt: true,
+              stoppedAt: true,
             },
           },
         },

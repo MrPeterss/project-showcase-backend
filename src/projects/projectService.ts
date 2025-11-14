@@ -79,7 +79,7 @@ export const listAllImages = async () => {
 /**
  * Clone a GitHub repository, build a Docker image from it, and run a container
  */
-export const deploy = async (teamId: number, githubUrl: string) => {
+export const deploy = async (teamId: number, githubUrl: string, deployedById: number) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -99,6 +99,7 @@ export const deploy = async (teamId: number, githubUrl: string) => {
       githubUrl,
       imageName: `${repoName}:latest`.toLowerCase(),
       status: 'building',
+      deployedById,
     },
   });
 

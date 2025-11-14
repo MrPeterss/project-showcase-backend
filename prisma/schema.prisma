@@ -24,6 +24,7 @@ model User {
 
   courseOfferingEnrollments CourseOfferingEnrollment[]
   teamMemberships           TeamMembership[]
+  deployedProjects          Project[]
 }
 
 model Course {
@@ -111,6 +112,8 @@ model Project {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  team   Team @relation(fields: [teamId], references: [id])
-  teamId Int
+  team       Team @relation(fields: [teamId], references: [id])
+  teamId     Int
+  deployedBy User? @relation(fields: [deployedById], references: [id])
+  deployedById Int?
 }

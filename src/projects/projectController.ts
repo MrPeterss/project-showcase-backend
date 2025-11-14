@@ -23,8 +23,9 @@ export const getAllImages = async (_req: Request, res: Response) => {
 
 export const deployProject = async (req: Request, res: Response) => {
   const { teamId, githubUrl } = req.body;
+  const { userId } = req.user!;
 
-  const result = await deploy(teamId, githubUrl);
+  const result = await deploy(teamId, githubUrl, userId);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
