@@ -86,3 +86,78 @@ The Dockerfile CMD runs three commands sequentially:
 1. **`npx prisma migrate deploy`** - Database migrations run automatically
 2. **`npm run seed`** - Admin users are seeded from `ADMIN_EMAILS`
 3. **`npm start`** - Server starts and accepts connections
+
+## Project Deployment with Build Flags
+
+When deploying projects, you can now provide custom Docker build arguments to configure the build process. This is useful for setting build-time variables like environment-specific configurations, feature flags, or build optimization settings.
+
+### API Usage
+
+When deploying a project, include the optional `buildArgs` field in your request:
+
+```bash
+# Deploy with build arguments
+curl -X POST http://localhost:3000/api/projects/deploy \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "teamId": 1,
+    "githubUrl": "https://github.com/username/repository",
+    "buildArgs": {
+      "NODE_ENV": "production",
+      "API_URL": "https://api.example.com",
+      "FEATURE_FLAG": "enabled"
+    }
+  }'
+```
+
+### Streaming Deployment with Build Flags
+
+The streaming deployment endpoint also supports build arguments:
+
+```bash
+# Deploy with streaming and build arguments
+curl -X POST http://localhost:3000/api/projects/deploy/stream \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{
+    "teamId": 1,
+    "githubUrl": "https://github.com/username/repository",
+    "buildArgs": {
+      "BUILD_VERSION": "1.0.0",
+      "ENABLE_CACHE": "true"
+    }
+  }'
+```
+
+### Using Build Arguments in Dockerfile
+
+To use the build arguments in your project's Dockerfile, declare them with `ARG`:
+
+```dockerfile
+# Dockerfile example
+FROM node:18-alpine
+
+# Declare build arguments
+ARG NODE_ENV=development
+ARG API_URL
+ARG FEATURE_FLAG=disabled
+
+# Use build arguments as environment variables
+ENV NODE_ENV=$NODE_ENV
+ENV API_URL=$API_URL
+ENV FEATURE_FLAG=$FEATURE_FLAG
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+# Build arguments are available during build
+RUN echo "Building with NODE_ENV=$NODE_ENV"
+
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+Build arguments are stored in the database along with the project deployment information and can be viewed in the project details.

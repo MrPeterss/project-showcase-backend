@@ -108,6 +108,7 @@ model Project {
   status        String    // running, stopped, failed, etc.
   ports         Json?     // Store port mappings as JSON
   buildLogs     String?   // Store build logs as text
+  buildArgs     Json?     // Store build arguments as JSON
   deployedAt    DateTime  @default(now())
   stoppedAt     DateTime?
   createdAt     DateTime  @default(now())

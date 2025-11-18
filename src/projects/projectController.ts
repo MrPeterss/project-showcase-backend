@@ -25,10 +25,10 @@ export const getAllImages = async (_req: Request, res: Response) => {
 };
 
 export const deployProject = async (req: Request, res: Response) => {
-  const { teamId, githubUrl } = req.body;
+  const { teamId, githubUrl, buildArgs } = req.body;
   const { userId } = req.user!;
 
-  const result = await deploy(teamId, githubUrl, userId);
+  const result = await deploy(teamId, githubUrl, userId, buildArgs);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -221,7 +221,7 @@ export const deployProjectWithStreamingController = async (
   req: Request,
   res: Response,
 ) => {
-  const { teamId, githubUrl } = req.body;
+  const { teamId, githubUrl, buildArgs } = req.body;
   const { userId } = req.user!;
 
   try {
@@ -229,6 +229,7 @@ export const deployProjectWithStreamingController = async (
       teamId,
       githubUrl,
       userId,
+      buildArgs,
     );
 
     // Set headers for Server-Sent Events

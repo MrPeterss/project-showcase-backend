@@ -10,6 +10,7 @@ export const deployProjectSchema = z.object({
         /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+(\/(tree|blob)\/[\w.-]+)?(\.git)?$/,
         'Must be a valid GitHub repository URL',
       ),
+    buildArgs: z.record(z.string(), z.string()).optional(),
   }),
 });
 

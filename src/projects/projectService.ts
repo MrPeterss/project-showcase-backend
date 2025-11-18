@@ -79,7 +79,12 @@ export const listAllImages = async () => {
 /**
  * Clone a GitHub repository, build a Docker image from it, and run a container
  */
-export const deploy = async (teamId: number, githubUrl: string, deployedById: number) => {
+export const deploy = async (
+  teamId: number,
+  githubUrl: string,
+  deployedById: number,
+  buildArgs?: Record<string, string>,
+) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -100,6 +105,7 @@ export const deploy = async (teamId: number, githubUrl: string, deployedById: nu
       imageName: `${repoName}:latest`.toLowerCase(),
       status: 'building',
       deployedById,
+      buildArgs: buildArgs || {},
     },
   });
 
@@ -135,14 +141,21 @@ export const deploy = async (teamId: number, githubUrl: string, deployedById: nu
 
     // Build the image
     const imageName = `${repoName}:latest`.toLowerCase();
+    const buildOptions: Record<string, unknown> = {
+      t: imageName,
+    };
+    
+    // Add build args if provided
+    if (buildArgs && Object.keys(buildArgs).length > 0) {
+      buildOptions.buildargs = buildArgs;
+    }
+    
     const stream = await docker.buildImage(
       {
         context: tempDir,
         src: ['.'],
       },
-      {
-        t: imageName,
-      },
+      buildOptions,
     );
 
     // Capture build logs
@@ -497,6 +510,7 @@ export const buildWithStreaming = async (
   teamId: number,
   githubUrl: string,
   deployedById: number,
+  buildArgs?: Record<string, string>,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -518,6 +532,7 @@ export const buildWithStreaming = async (
       imageName: `${repoName}:latest`.toLowerCase(),
       status: 'building',
       deployedById,
+      buildArgs: buildArgs || {},
     },
   });
 
@@ -549,14 +564,21 @@ export const buildWithStreaming = async (
 
       // Build the image and get the stream
       const imageName = `${repoName}:latest`.toLowerCase();
+      const buildOptions: Record<string, unknown> = {
+        t: imageName,
+      };
+      
+      // Add build args if provided
+      if (buildArgs && Object.keys(buildArgs).length > 0) {
+        buildOptions.buildargs = buildArgs;
+      }
+      
       const buildStream = await docker.buildImage(
         {
           context: tempDir,
           src: ['.'],
         },
-        {
-          t: imageName,
-        },
+        buildOptions,
       );
 
       // Return the raw stream - caller will handle progress events
