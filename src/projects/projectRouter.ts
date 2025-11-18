@@ -3,17 +3,17 @@ import { Router } from 'express';
 import { validateRequest } from '../middleware/validateRequest.js';
 import {
   deployProjectSchema,
-  getProjectLogsSchema,
   getTeamProjectsSchema,
   stopProjectSchema,
+  streamProjectLogsSchema,
 } from './project.schema.js';
 import {
   deployProject,
   getProject,
-  getProjectLogsController,
   getProjects,
   getTeamProjectsController,
   stopProjectController,
+  streamProjectLogsController,
 } from './projectController.js';
 
 const router = Router();
@@ -28,11 +28,12 @@ router.post(
   stopProjectController,
 );
 
-// Get logs for a specific project
+
+// Stream logs for a specific project
 router.get(
   '/:projectId/logs',
-  validateRequest(getProjectLogsSchema),
-  getProjectLogsController,
+  validateRequest(streamProjectLogsSchema),
+  streamProjectLogsController,
 );
 
 // Team-specific project routes

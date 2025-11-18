@@ -25,7 +25,7 @@ export const stopProjectSchema = z.object({
   }),
 });
 
-export const getProjectLogsSchema = z.object({
+export const streamProjectLogsSchema = z.object({
   params: z.object({
     projectId: z.string().transform(Number).pipe(z.number().int().positive()),
   }),

@@ -154,7 +154,7 @@ export const deploy = async (teamId: number, githubUrl: string, deployedById: nu
     });
 
     // Run the container with appropriate startup command
-    const containerConfig: any = {
+    const containerConfig: unknown = {
       Image: imageName,
       name: `${team.name.toLowerCase()}`,
       HostConfig: {
@@ -171,7 +171,7 @@ export const deploy = async (teamId: number, githubUrl: string, deployedById: nu
       },
     };
 
-    const container = await docker.createContainer(containerConfig);
+    const container = await docker.createContainer(containerConfig!);
 
     await container.start();
 
@@ -360,14 +360,16 @@ export const getAllProjects = async () => {
 };
 
 /**
- * Get logs from a running container
+ * Stream logs from a running container in real-time
+ * Returns a stream that can be piped to a response
  */
-export const getProjectLogs = async (
+export const streamProjectLogs = async (
   projectId: number,
   options: {
     tail?: number;
     since?: string;
     timestamps?: boolean;
+    follow?: boolean;
   } = {},
 ) => {
   const project = await prisma.project.findUnique({
@@ -385,18 +387,18 @@ export const getProjectLogs = async (
   try {
     const container = docker.getContainer(project.containerId);
 
-    // Check if container exists and get its state
-    const containerInfo = await container.inspect();
+    // Check if container exists
+    await container.inspect();
 
     const logOptions: {
-      follow?: false;
+      follow: true;
       stdout: boolean;
       stderr: boolean;
-      tail?: number;
+      tail: number;
+      timestamps: boolean;
       since?: string;
-      timestamps?: boolean;
     } = {
-      follow: false,
+      follow: true, // Explicitly set as true for type safety
       stdout: true,
       stderr: true,
       tail: options.tail || 100,
@@ -407,18 +409,16 @@ export const getProjectLogs = async (
       logOptions.since = options.since;
     }
 
-    const logs = await container.logs(logOptions);
-
-    // Convert buffer to string
-    const logsString = logs.toString();
+    const logStream = await container.logs(logOptions);
 
     return {
-      projectId,
-      containerId: project.containerId,
-      containerName: project.containerName,
-      status: project.status,
-      containerState: containerInfo.State,
-      logs: logsString,
+      project: {
+        id: project.id,
+        containerId: project.containerId,
+        containerName: project.containerName,
+        status: project.status,
+      },
+      stream: logStream,
     };
   } catch (error) {
     if ((error as { statusCode?: number }).statusCode === 404) {
