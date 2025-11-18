@@ -7,6 +7,7 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
+const DATA_MOUNT_PATH = '/data/uploaded-data'; // Standardized mount path in container
 
 /**
  * Extract repository name from GitHub URL
@@ -84,6 +85,7 @@ export const deploy = async (
   githubUrl: string,
   deployedById: number,
   buildArgs?: Record<string, string>,
+  dataFilePath?: string,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -196,6 +198,7 @@ export const deploy = async (
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB
+        Binds: dataFilePath ? [`${dataFilePath}:${DATA_MOUNT_PATH}:ro`] : undefined,
       },
       NetworkingConfig: {
         EndpointsConfig: {
@@ -511,6 +514,7 @@ export const buildWithStreaming = async (
   githubUrl: string,
   deployedById: number,
   buildArgs?: Record<string, string>,
+  dataFilePath?: string,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -533,6 +537,7 @@ export const buildWithStreaming = async (
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
+      dataFile: dataFilePath || null,
     },
   });
 
@@ -611,6 +616,7 @@ export const buildWithStreaming = async (
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
           Memory: 800 * 1024 * 1024, // 800MB
+          Binds: dataFilePath ? [`${dataFilePath}:${DATA_MOUNT_PATH}:ro`] : undefined,
         },
         NetworkingConfig: {
           EndpointsConfig: {

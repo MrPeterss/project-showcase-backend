@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const deployProjectSchema = z.object({
   body: z.object({
-    teamId: z.number().int().positive(),
+    teamId: z.string().transform(Number).pipe(z.number().int().positive()),
     githubUrl: z
       .string()
       .url()
@@ -10,7 +10,14 @@ export const deployProjectSchema = z.object({
         /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+(\/(tree|blob)\/[\w.-]+)?(\.git)?$/,
         'Must be a valid GitHub repository URL',
       ),
-    buildArgs: z.record(z.string(), z.string()).optional(),
+    buildArgs: z.string().optional().transform((val) => {
+      if (!val) return undefined;
+      try {
+        return JSON.parse(val);
+      } catch {
+        return undefined;
+      }
+    }),
   }),
 });
 
