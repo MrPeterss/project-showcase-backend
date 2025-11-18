@@ -2,7 +2,17 @@ import { z } from 'zod';
 
 export const deployProjectSchema = z.object({
   body: z.object({
-    teamId: z.string().transform(Number).pipe(z.number().int().positive()),
+    teamId: z.string().transform((val, ctx) => {
+      const parsed = parseInt(val, 10);
+      if (isNaN(parsed)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Invalid offering ID',
+        });
+        return z.NEVER;
+      }
+      return parsed;
+    }),
     githubUrl: z
       .string()
       .url()
@@ -23,7 +33,17 @@ export const deployProjectSchema = z.object({
 
 export const getTeamProjectsSchema = z.object({
   params: z.object({
-    teamId: z.string().transform(Number).pipe(z.number().int().positive()),
+    teamId: z.string().transform((val, ctx) => {
+      const parsed = parseInt(val, 10);
+      if (isNaN(parsed)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Invalid offering ID',
+        });
+        return z.NEVER;
+      }
+      return parsed;
+    }),
   }),
 });
 
