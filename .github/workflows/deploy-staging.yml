@@ -31,6 +31,7 @@ jobs:
             --network projects_network \
             --env-file ${{ secrets.ENV_FILE_PATH }} \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ secrets.HOST_PROJECT_DATA_PATH }}:{{ secrets.CONTAINER_PROJECT_DATA_PATH }}
             -v ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PATH }}:/app/firebase-service-account.json:ro \
             -v ${{ secrets.DATABASE_PATH }}:/app/data/sqlite.db \
             project-showcase-backend:latest
