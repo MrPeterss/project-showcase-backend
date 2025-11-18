@@ -22,7 +22,8 @@ import {
 } from './projectController.js';
 
 // Configure multer for file uploads
-const uploadDir = '/tmp/project-data-files';
+// Use a path that will be mounted as a volume from the host
+const uploadDir = process.env.DATA_FILES_DIR || '/app/data/project-data-files';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }

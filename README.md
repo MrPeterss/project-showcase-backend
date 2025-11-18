@@ -59,25 +59,64 @@ npm run test
 
 This application includes Docker support with automatic database migrations and admin user seeding on startup.
 
-### Quick Start with Docker
+### Quick Start with Docker Compose (Recommended)
+
+The recommended way to run the backend is with Docker Compose, which ensures proper volume mounts for data persistence:
 
 ```bash
+# Create required directories on host
+mkdir -p data project-data-files
+
+# Start the service
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+```
+
+**Important Volume Mounts:**
+
+- `./data:/app/data` - Persists the SQLite database across container restarts
+- `./project-data-files:/app/data/project-data-files` - Persists uploaded data files for deployed projects
+- `/var/run/docker.sock:/var/run/docker.sock` - Allows the backend to manage student project containers
+
+### Manual Docker Run
+
+If you prefer to run without Docker Compose:
+
+```bash
+# Create required directories
+mkdir -p data project-data-files
+
 # Build the image
 docker build -t project-showcase-backend .
 
-# Run the container
+# Run the container with all necessary volume mounts
 docker run -d \
   --name showcase-backend \
   -p 8000:8000 \
   -e ADMIN_EMAILS="admin1@example.com,admin2@example.com" \
-  -e DATABASE_URL="file:/app/data/dev.db" \
+  -e DATABASE_URL="file:/app/data/sqlite.db" \
   -e NODE_ENV="production" \
   -v $(pwd)/data:/app/data \
+  -v $(pwd)/project-data-files:/app/data/project-data-files \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/firebase-service-account.json:/app/firebase-service-account.json:ro \
+  --network projects_network \
   project-showcase-backend
 
 # View logs
 docker logs -f showcase-backend
 ```
+
+### Data Persistence
+
+All data is persisted on the host machine in the following directories:
+
+- **`./data/`** - Contains the SQLite database (`sqlite.db`) and Prisma migrations
+- **`./project-data-files/`** - Contains uploaded data files that are mounted to student project containers
+
+These directories will survive container restarts, rebuilds, and updates.
 
 ### What Happens on Container Startup
 
@@ -161,3 +200,63 @@ CMD ["npm", "start"]
 ```
 
 Build arguments are stored in the database along with the project deployment information and can be viewed in the project details.
+
+## Project Deployment with Data Files
+
+When deploying projects, you can upload a data file that will be automatically mounted to the deployed container. This is useful for providing datasets, configuration files, or other resources that your project needs at runtime.
+
+### API Usage with Data File Upload
+
+Data files must be uploaded using `multipart/form-data`:
+
+```bash
+# Deploy with a data file
+curl -X POST http://localhost:3000/api/projects/deploy \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "teamId=1" \
+  -F "githubUrl=https://github.com/username/repository" \
+  -F "buildArgs={\"NODE_ENV\":\"production\"}" \
+  -F "dataFile=@/path/to/your/data.csv"
+```
+
+### Streaming Deployment with Data File
+
+```bash
+# Deploy with streaming and data file
+curl -X POST http://localhost:3000/api/projects/deploy-streaming \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "teamId=1" \
+  -F "githubUrl=https://github.com/username/repository" \
+  -F "dataFile=@/path/to/dataset.json"
+```
+
+### Data File Details
+
+- **Upload Limit:** 100MB per file
+- **Storage:** Files are stored on the host at `./project-data-files/` (persists across restarts)
+- **Mount Path:** All uploaded files are mounted read-only at `/data/uploaded-data` in the container
+- **Access in Container:** Your application can read the file at `/data/uploaded-data`
+
+### Example: Using Data File in Your Application
+
+```python
+# Python example
+import pandas as pd
+
+# Read the uploaded data file
+df = pd.read_csv('/data/uploaded-data')
+print(f"Loaded {len(df)} rows from uploaded data")
+```
+
+```javascript
+// Node.js example
+const fs = require('fs');
+const path = require('path');
+
+// Read the uploaded data file
+const dataPath = '/data/uploaded-data';
+const data = fs.readFileSync(dataPath, 'utf8');
+console.log('Loaded data:', data);
+```
+
+The data file path is stored in the database with the project deployment information.
