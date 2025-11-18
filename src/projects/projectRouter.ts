@@ -6,6 +6,7 @@ import {
   getTeamProjectsSchema,
   stopProjectSchema,
   streamProjectLogsSchema,
+  streamBuildLogsSchema,
 } from './project.schema.js';
 import {
   deployProject,
@@ -14,12 +15,19 @@ import {
   getTeamProjectsController,
   stopProjectController,
   streamProjectLogsController,
+  streamBuildLogsController,
+  deployProjectWithStreamingController,
 } from './projectController.js';
 
 const router = Router();
 
 // Project CRUD routes
 router.post('/deploy', validateRequest(deployProjectSchema), deployProject);
+router.post(
+  '/deploy-streaming',
+  validateRequest(deployProjectSchema),
+  deployProjectWithStreamingController,
+);
 router.get('/', getProjects);
 router.get('/:projectId', getProject);
 router.post(
@@ -34,6 +42,13 @@ router.get(
   '/:projectId/logs',
   validateRequest(streamProjectLogsSchema),
   streamProjectLogsController,
+);
+
+// Stream build logs for a specific project
+router.get(
+  '/:projectId/build-logs',
+  validateRequest(streamBuildLogsSchema),
+  streamBuildLogsController,
 );
 
 // Team-specific project routes

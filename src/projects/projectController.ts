@@ -9,7 +9,10 @@ import {
   listRunningContainers,
   stopProject,
   streamProjectLogs,
+  streamBuildLogs,
+  buildWithStreaming,
 } from './projectService.js';
+import { docker } from '../docker.js';
 
 export const getRunningContainers = async (_req: Request, res: Response) => {
   const containers = await listRunningContainers();
@@ -156,6 +159,150 @@ export const streamProjectLogsController = async (
       throw error;
     } else {
       // Otherwise send as SSE error
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`,
+      );
+      res.end();
+    }
+  }
+};
+
+export const streamBuildLogsController = async (
+  req: Request,
+  res: Response,
+) => {
+  const { projectId } = req.params;
+
+  try {
+    const { project, buildLogs } = await streamBuildLogs(Number(projectId));
+
+    // Set headers for Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial project info
+    res.write(
+      `data: ${JSON.stringify({ type: 'info', project })}\n\n`,
+    );
+
+    if (buildLogs && buildLogs.length > 0) {
+      // Send each build log line
+      for (const log of buildLogs) {
+        res.write(`data: ${JSON.stringify({ type: 'log', data: log })}\n\n`);
+      }
+    } else {
+      res.write(
+        `data: ${JSON.stringify({ type: 'info', message: 'No build logs available' })}\n\n`,
+      );
+    }
+
+    // Send end event
+    res.write(
+      `data: ${JSON.stringify({ type: 'end', message: 'Build logs stream ended' })}\n\n`,
+    );
+    res.end();
+  } catch (error) {
+    // If headers haven't been sent yet, send error as JSON
+    if (!res.headersSent) {
+      throw error;
+    } else {
+      // Otherwise send as SSE error
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`,
+      );
+      res.end();
+    }
+  }
+};
+
+export const deployProjectWithStreamingController = async (
+  req: Request,
+  res: Response,
+) => {
+  const { teamId, githubUrl } = req.body;
+  const { userId } = req.user!;
+
+  try {
+    const { project, initBuild, completeBuild } = await buildWithStreaming(
+      teamId,
+      githubUrl,
+      userId,
+    );
+
+    // Set headers for Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial project info
+    res.write(
+      `data: ${JSON.stringify({ type: 'start', project })}\n\n`,
+    );
+
+    // Initialize the build and get the stream
+    const buildStream = await initBuild();
+    const buildLogLines: string[] = [];
+
+    // Follow the build progress and stream events to client
+    docker.modem.followProgress(
+      buildStream,
+      async (err, _result) => {
+        if (err) {
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`,
+          );
+          res.end();
+          return;
+        }
+
+        // Build completed successfully, now start the container
+        try {
+          const updatedProject = await completeBuild(buildLogLines);
+          res.write(
+            `data: ${JSON.stringify({ type: 'complete', project: updatedProject })}\n\n`,
+          );
+          res.end();
+        } catch (completeError) {
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: (completeError as Error).message })}\n\n`,
+          );
+          res.end();
+        }
+      },
+      (event) => {
+        // Stream each build event to the client in real-time
+        let logLine = '';
+        
+        if (event.stream) {
+          logLine = event.stream;
+        } else if (event.status) {
+          logLine = `${event.status}${event.progress ? ` ${event.progress}` : ''}\n`;
+        } else if (event.error) {
+          logLine = `ERROR: ${event.error}\n`;
+        }
+
+        if (logLine) {
+          buildLogLines.push(logLine);
+          res.write(
+            `data: ${JSON.stringify({ type: 'log', data: logLine })}\n\n`,
+          );
+        }
+      },
+    );
+
+    // Handle client disconnect
+    req.on('close', () => {
+      if ('destroy' in buildStream && typeof buildStream.destroy === 'function') {
+        buildStream.destroy();
+      }
+    });
+  } catch (error) {
+    if (!res.headersSent) {
+      throw error;
+    } else {
       res.write(
         `data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`,
       );

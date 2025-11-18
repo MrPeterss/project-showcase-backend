@@ -107,6 +107,7 @@ model Project {
   containerName String?
   status        String    // running, stopped, failed, etc.
   ports         Json?     // Store port mappings as JSON
+  buildLogs     String?   // Store build logs as text
   deployedAt    DateTime  @default(now())
   stoppedAt     DateTime?
   createdAt     DateTime  @default(now())

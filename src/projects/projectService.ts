@@ -145,12 +145,34 @@ export const deploy = async (teamId: number, githubUrl: string, deployedById: nu
       },
     );
 
+    // Capture build logs
+    const buildLogLines: string[] = [];
+
     // Wait for the build to complete
     await new Promise((resolve, reject) => {
-      docker.modem.followProgress(stream, (err, res) => {
-        if (err) reject(err);
-        else resolve(res);
-      });
+      docker.modem.followProgress(
+        stream,
+        (err, res) => {
+          if (err) reject(err);
+          else resolve(res);
+        },
+        (event) => {
+          // Capture build output
+          if (event.stream) {
+            buildLogLines.push(event.stream);
+          } else if (event.status) {
+            buildLogLines.push(`${event.status}${event.progress ? ` ${event.progress}` : ''}\n`);
+          } else if (event.error) {
+            buildLogLines.push(`ERROR: ${event.error}\n`);
+          }
+        },
+      );
+    });
+
+    // Store build logs in database
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { buildLogs: buildLogLines.join('') },
     });
 
     // Run the container with appropriate startup command
@@ -426,4 +448,203 @@ export const streamProjectLogs = async (
     }
     throw error;
   }
+};
+
+/**
+ * Stream build logs for a project
+ * Returns stored build logs from when the project was built
+ */
+export const streamBuildLogs = async (projectId: number) => {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      team: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  // Parse build logs into array of lines
+  const buildLogs = project.buildLogs
+    ? project.buildLogs.split('\n').filter((line: string) => line.trim().length > 0)
+    : [];
+
+  return {
+    project: {
+      id: project.id,
+      status: project.status,
+      githubUrl: project.githubUrl,
+      imageName: project.imageName,
+      team: project.team,
+      deployedAt: project.deployedAt,
+    },
+    buildLogs,
+  };
+};
+
+/**
+ * Build and deploy a project with real-time log streaming
+ * This version returns a stream that emits build events in real-time
+ */
+export const buildWithStreaming = async (
+  teamId: number,
+  githubUrl: string,
+  deployedById: number,
+) => {
+  // Verify team exists
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+  });
+
+  if (!team) {
+    throw new NotFoundError('Team not found');
+  }
+
+  const repoName = extractRepoName(githubUrl);
+  const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
+
+  // Create initial project record
+  const project = await prisma.project.create({
+    data: {
+      teamId,
+      githubUrl,
+      imageName: `${repoName}:latest`.toLowerCase(),
+      status: 'building',
+      deployedById,
+    },
+  });
+
+  // This will be populated with the actual docker build stream
+  const initBuild = async () => {
+    try {
+      // Stop and remove existing container with the same name if it exists
+      const containerName = team.name.toLowerCase();
+      
+      try {
+        const existingContainer = docker.getContainer(containerName);
+        await existingContainer.stop();
+      } catch {
+        // Continue even if stop fails
+      }
+
+      try {
+        const existingContainer = docker.getContainer(containerName);
+        await existingContainer.remove();
+      } catch {
+        // Continue even if remove fails
+      }
+
+      // Ensure the projects network exists
+      await ensureProjectsNetwork();
+
+      // Clone the repository
+      await git.clone(githubUrl, tempDir);
+
+      // Build the image and get the stream
+      const imageName = `${repoName}:latest`.toLowerCase();
+      const buildStream = await docker.buildImage(
+        {
+          context: tempDir,
+          src: ['.'],
+        },
+        {
+          t: imageName,
+        },
+      );
+
+      // Return the raw stream - caller will handle progress events
+      return buildStream;
+    } catch (error) {
+      // Update project status to failed
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { status: 'failed' },
+      });
+      throw error;
+    }
+  };
+
+  const completeBuild = async (buildLogsToStore: string[]) => {
+    try {
+      const imageName = `${repoName}:latest`.toLowerCase();
+
+      // Store build logs in database
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { buildLogs: buildLogsToStore.join('') },
+      });
+
+      // Run the container
+      const containerConfig: unknown = {
+        Image: imageName,
+        name: `${team.name.toLowerCase()}`,
+        HostConfig: {
+          AutoRemove: false,
+          NetworkMode: PROJECTS_NETWORK,
+          Memory: 800 * 1024 * 1024, // 800MB
+        },
+        NetworkingConfig: {
+          EndpointsConfig: {
+            [PROJECTS_NETWORK]: {
+              Aliases: [team.name.toLowerCase()],
+            },
+          },
+        },
+      };
+
+      const container = await docker.createContainer(containerConfig!);
+      await container.start();
+
+      // Get container info
+      const containerInfo = await container.inspect();
+
+      // Update project with container information
+      const updatedProject = await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          containerId: container.id,
+          containerName: containerInfo.Name,
+          status: 'running',
+          ports: containerInfo.NetworkSettings.Ports,
+          deployedAt: new Date(),
+        },
+        include: {
+          team: true,
+        },
+      });
+
+      return updatedProject;
+    } catch (error) {
+      // Update project status to failed
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { status: 'failed' },
+      });
+      throw error;
+    } finally {
+      // Clean up the temporary directory
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
+  };
+
+  return {
+    project: {
+      id: project.id,
+      teamId: project.teamId,
+      githubUrl: project.githubUrl,
+      imageName: project.imageName,
+      status: project.status,
+    },
+    initBuild,
+    completeBuild,
+  };
 };

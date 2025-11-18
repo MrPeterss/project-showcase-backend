@@ -42,3 +42,9 @@ export const streamProjectLogsSchema = z.object({
       .transform((val) => val === 'true'),
   }),
 });
+
+export const streamBuildLogsSchema = z.object({
+  params: z.object({
+    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+  }),
+});
