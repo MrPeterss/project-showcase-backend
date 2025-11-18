@@ -29,7 +29,7 @@ export const deployProject = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
 
-  const result = await deploy(teamId, githubUrl, userId, buildArgs, dataFilePath);
+  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -228,7 +228,7 @@ export const deployProjectWithStreamingController = async (
 
   try {
     const { project, initBuild, completeBuild } = await buildWithStreaming(
-      teamId,
+      Number(teamId),
       githubUrl,
       userId,
       buildArgs,
