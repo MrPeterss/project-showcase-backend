@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const deployProjectSchema = z.object({
   body: z.object({
-    teamId: z.string().transform(Number).pipe(z.number().int().positive()),
+    teamId: z.number().int().positive(),
     githubUrl: z
       .string()
       .url()
@@ -23,7 +23,7 @@ export const deployProjectSchema = z.object({
 
 export const getTeamProjectsSchema = z.object({
   params: z.object({
-    teamId: z.string().transform(Number).pipe(z.number().int().positive()),
+    teamId: z.number().int().positive(),
   }),
 });
 
