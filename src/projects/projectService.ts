@@ -8,8 +8,11 @@ import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
-const getContainerDataFilePath = (filePath: string): string =>
-  path.posix.join(DATA_MOUNT_PATH, path.basename(filePath));
+const getContainerDataFilePath = (filePath: string): string => {
+  console.log('filePath', filePath);
+  console.log('basename', path.basename(filePath));
+  return path.posix.join(DATA_MOUNT_PATH, path.basename(filePath));
+}
 
 /**
  * Extract repository name from GitHub URL
