@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
+import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 import {
   ConflictError,
@@ -380,6 +381,9 @@ export const deleteTeam = async (req: Request, res: Response) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
+    include: {
+      projects: true,
+    },
   });
 
   if (!team) {
@@ -397,6 +401,41 @@ export const deleteTeam = async (req: Request, res: Response) => {
     }
   }
 
+  // Stop and remove Docker containers for all projects
+  for (const project of team.projects) {
+    if (project.containerId) {
+      try {
+        const container = docker.getContainer(project.containerId);
+        try {
+          await container.stop();
+        } catch (stopError) {
+          // Container might already be stopped, continue
+          console.log(`Failed to stop container ${project.containerId}:`, stopError);
+        }
+        try {
+          await container.remove();
+        } catch (removeError) {
+          // Container might already be removed, continue
+          console.log(`Failed to remove container ${project.containerId}:`, removeError);
+        }
+      } catch (error) {
+        // Container might not exist, continue with deletion
+        console.log(`Container ${project.containerId} not found, continuing deletion`);
+      }
+    }
+  }
+
+  // Delete all projects for this team
+  await prisma.project.deleteMany({
+    where: { teamId },
+  });
+
+  // Delete all team memberships for this team
+  await prisma.teamMembership.deleteMany({
+    where: { teamId },
+  });
+
+  // Finally, delete the team
   await prisma.team.delete({
     where: { id: teamId },
   });
