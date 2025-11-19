@@ -8,22 +8,42 @@ import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
-const getContainerDataFilePath = (filePath: string, originalFileName?: string): string => {
-  const fileName = originalFileName || path.basename(filePath);
-  return path.posix.join(DATA_MOUNT_PATH, fileName);
+
+/**
+ * Get the team data directory path
+ */
+const getTeamDataDir = (teamId: number): string => {
+  const uploadDir = process.env.DATA_FILES_DIR || '/app/data/project-data-files';
+  return path.join(uploadDir, `team-${teamId}`);
 }
 
 /**
- * Validate that the data file exists and is a file (not a directory)
+ * Ensure team data directory exists and move file there if provided
  */
-const validateDataFile = (filePath: string): void => {
-  if (!fs.existsSync(filePath)) {
-    throw new BadRequestError(`Data file not found: ${filePath}`);
+const ensureTeamDataDir = async (teamId: number, uploadedFilePath?: string, originalFileName?: string): Promise<string | undefined> => {
+  const teamDir = getTeamDataDir(teamId);
+  
+  // Create team directory if it doesn't exist
+  if (!fs.existsSync(teamDir)) {
+    fs.mkdirSync(teamDir, { recursive: true });
   }
-  const stats = fs.statSync(filePath);
-  if (!stats.isFile()) {
-    throw new BadRequestError(`Data file path is not a file: ${filePath}`);
+  
+  // If a file was uploaded, move it to the team directory with its original name
+  if (uploadedFilePath && originalFileName) {
+    const targetPath = path.join(teamDir, originalFileName);
+    // Move the file (overwrite if exists)
+    fs.copyFileSync(uploadedFilePath, targetPath);
+    // Remove the original uploaded file
+    fs.unlinkSync(uploadedFilePath);
+    return teamDir;
   }
+  
+  // If no file uploaded but directory exists, return it anyway (for mounting existing files)
+  if (fs.existsSync(teamDir)) {
+    return teamDir;
+  }
+  
+  return undefined;
 }
 
 /**
@@ -114,10 +134,8 @@ export const deploy = async (
     throw new NotFoundError('Team not found');
   }
 
-  // Validate data file if provided
-  if (dataFilePath) {
-    validateDataFile(dataFilePath);
-  }
+  // Organize uploaded file into team directory
+  const teamDataDir = await ensureTeamDataDir(teamId, dataFilePath, originalFileName);
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
@@ -221,8 +239,8 @@ export const deploy = async (
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB
-        Binds: dataFilePath
-          ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
+        Binds: teamDataDir
+          ? [`${teamDataDir}:${DATA_MOUNT_PATH}:ro`]
           : undefined,
       },
       NetworkingConfig: {
@@ -551,10 +569,8 @@ export const buildWithStreaming = async (
     throw new NotFoundError('Team not found');
   }
 
-  // Validate data file if provided
-  if (dataFilePath) {
-    validateDataFile(dataFilePath);
-  }
+  // Organize uploaded file into team directory
+  const teamDataDir = await ensureTeamDataDir(teamId, dataFilePath, originalFileName);
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
@@ -647,8 +663,8 @@ export const buildWithStreaming = async (
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
           Memory: 800 * 1024 * 1024, // 800MB
-          Binds: dataFilePath
-            ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
+          Binds: teamDataDir
+            ? [`${teamDataDir}:${DATA_MOUNT_PATH}:ro`]
             : undefined,
         },
         NetworkingConfig: {
