@@ -8,10 +8,9 @@ import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
-const getContainerDataFilePath = (filePath: string): string => {
-  console.log('filePath', filePath);
-  console.log('basename', path.basename(filePath));
-  return path.posix.join(DATA_MOUNT_PATH, path.basename(filePath));
+const getContainerDataFilePath = (filePath: string, originalFileName?: string): string => {
+  const fileName = originalFileName || path.basename(filePath);
+  return path.posix.join(DATA_MOUNT_PATH, fileName);
 }
 
 /**
@@ -91,6 +90,7 @@ export const deploy = async (
   deployedById: number,
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
+  originalFileName?: string,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -204,7 +204,7 @@ export const deploy = async (
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB
         Binds: dataFilePath
-          ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath)}:ro`]
+          ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
           : undefined,
       },
       NetworkingConfig: {
@@ -522,6 +522,7 @@ export const buildWithStreaming = async (
   deployedById: number,
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
+  originalFileName?: string,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -624,7 +625,7 @@ export const buildWithStreaming = async (
           NetworkMode: PROJECTS_NETWORK,
           Memory: 800 * 1024 * 1024, // 800MB
           Binds: dataFilePath
-            ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath)}:ro`]
+            ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
             : undefined,
         },
         NetworkingConfig: {

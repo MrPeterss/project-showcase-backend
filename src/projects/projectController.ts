@@ -1,5 +1,8 @@
 import type { Request, Response } from 'express';
 
+// Import type definitions to extend Express Request
+import '../types/express/index.js';
+
 import {
   deploy,
   getAllProjects,
@@ -28,8 +31,9 @@ export const deployProject = async (req: Request, res: Response) => {
   const { teamId, githubUrl, buildArgs } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
+  const originalFileName = req.file?.originalname;
 
-  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath);
+  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -225,6 +229,7 @@ export const deployProjectWithStreamingController = async (
   const { teamId, githubUrl, buildArgs } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
+  const originalFileName = req.file?.originalname;
 
   try {
     const { project, initBuild, completeBuild } = await buildWithStreaming(
@@ -233,6 +238,7 @@ export const deployProjectWithStreamingController = async (
       userId,
       buildArgs,
       dataFilePath,
+      originalFileName,
     );
 
     // Set headers for Server-Sent Events
