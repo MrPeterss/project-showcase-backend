@@ -1,8 +1,5 @@
 import type { Request, Response } from 'express';
 
-// Import type definitions to extend Express Request
-import '../types/express/index.js';
-
 import {
   deploy,
   getAllProjects,
