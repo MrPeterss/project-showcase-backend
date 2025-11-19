@@ -14,6 +14,19 @@ const getContainerDataFilePath = (filePath: string, originalFileName?: string): 
 }
 
 /**
+ * Validate that the data file exists and is a file (not a directory)
+ */
+const validateDataFile = (filePath: string): void => {
+  if (!fs.existsSync(filePath)) {
+    throw new BadRequestError(`Data file not found: ${filePath}`);
+  }
+  const stats = fs.statSync(filePath);
+  if (!stats.isFile()) {
+    throw new BadRequestError(`Data file path is not a file: ${filePath}`);
+  }
+}
+
+/**
  * Extract repository name from GitHub URL
  */
 const extractRepoName = (githubUrl: string): string => {
@@ -99,6 +112,11 @@ export const deploy = async (
 
   if (!team) {
     throw new NotFoundError('Team not found');
+  }
+
+  // Validate data file if provided
+  if (dataFilePath) {
+    validateDataFile(dataFilePath);
   }
 
   const repoName = extractRepoName(githubUrl);
@@ -531,6 +549,11 @@ export const buildWithStreaming = async (
 
   if (!team) {
     throw new NotFoundError('Team not found');
+  }
+
+  // Validate data file if provided
+  if (dataFilePath) {
+    validateDataFile(dataFilePath);
   }
 
   const repoName = extractRepoName(githubUrl);
