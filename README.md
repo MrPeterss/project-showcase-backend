@@ -16,18 +16,20 @@ cp .env.example .env
 
 Edit your `.env` file with the following variables:
 
-| Variable                        | Description                           | Default                           | Example                                    |
-| ------------------------------- | ------------------------------------- | --------------------------------- | ------------------------------------------ |
-| `ADMIN_EMAILS`                  | Comma-separated admin emails          | (empty)                           | `admin1@example.com,admin2@example.com`    |
-| `PORT`                          | Server port                           | `3000`                            | `3000`                                     |
-| `NODE_ENV`                      | Environment mode                      | `development`                     | `development`, `production`, `test`        |
-| `DATABASE_URL`                  | Database connection string            | `file:./dev.db`                   | `postgresql://user:pass@localhost:5432/db` |
-| `RATE_LIMIT_WINDOW_MS`          | Rate limit window in milliseconds     | `900000` (15 min)                 | `900000`                                   |
-| `RATE_LIMIT_MAX_REQUESTS`       | Max requests per window               | `100`                             | `100`                                      |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | Path to Firebase service account JSON | `./firebase-service-account.json` | `./config/firebase.json`                   |
-| `PRISMA_LOG_QUERIES`            | Enable query logging                  | `true`                            | `true`, `false`                            |
-| `PRISMA_LOG_ERRORS`             | Enable error logging                  | `true`                            | `true`, `false`                            |
-| `PRISMA_LOG_WARNINGS`           | Enable warning logging                | `true`                            | `true`, `false`                            |
+| Variable                        | Description                                                     | Default                           | Example                                    |
+| ------------------------------- | --------------------------------------------------------------- | --------------------------------- | ------------------------------------------ |
+| `ADMIN_EMAILS`                  | Comma-separated admin emails                                    | (empty)                           | `admin1@example.com,admin2@example.com`    |
+| `PORT`                          | Server port                                                     | `3000`                            | `3000`                                     |
+| `NODE_ENV`                      | Environment mode                                                | `development`                     | `development`, `production`, `test`        |
+| `DATABASE_URL`                  | Database connection string                                      | `file:./dev.db`                   | `postgresql://user:pass@localhost:5432/db` |
+| `RATE_LIMIT_WINDOW_MS`          | Rate limit window in milliseconds                               | `900000` (15 min)                 | `900000`                                   |
+| `RATE_LIMIT_MAX_REQUESTS`       | Max requests per window                                         | `100`                             | `100`                                      |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | Path to Firebase service account JSON                           | `./firebase-service-account.json` | `./config/firebase.json`                   |
+| `PRISMA_LOG_QUERIES`            | Enable query logging                                            | `true`                            | `true`, `false`                            |
+| `PRISMA_LOG_ERRORS`             | Enable error logging                                            | `true`                            | `true`, `false`                            |
+| `PRISMA_LOG_WARNINGS`           | Enable warning logging                                          | `true`                            | `true`, `false`                            |
+| `DATA_FILES_DIR`                | Directory where uploaded data files are stored (container path) | `/app/data/project-data-files`    | `/app/data/project-data-files`             |
+| `DATA_FILES_HOST_DIR`           | Host/server path for data files (used for Docker bind mounts)   | (empty - uses `DATA_FILES_DIR`)   | `/home/shared/project-data-files`          |
 
 ### 3. Seed Admin Users
 

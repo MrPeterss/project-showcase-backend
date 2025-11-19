@@ -7,38 +7,26 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
-const DATA_MOUNT_PATH = '/var/www/data'; // Standardized base directory in container
+const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
 
-/**
- * Get the team data directory path
- */
-const getTeamDataDir = (teamId: number): string => {
-  const uploadDir = process.env.DATA_FILES_DIR || '/app/data/project-data-files';
-  return path.join(uploadDir, `team-${teamId}`);
-}
+// Get the host path for Docker bind mounts
+// If DATA_FILES_HOST_DIR is set, replace the container directory with the host directory
+const getHostDataFilePath = (filePath: string): string => {
+  const containerDataDir = process.env.DATA_FILES_DIR || '/app/data/project-data-files';
+  const hostDataDir = process.env.DATA_FILES_HOST_DIR;
+  
+  if (hostDataDir && filePath.startsWith(containerDataDir)) {
+    // Replace container directory with host directory
+    return filePath.replace(containerDataDir, hostDataDir);
+  }
+  
+  // If no host directory is configured, use the file path as-is
+  return filePath;
+};
 
-/**
- * Ensure team data directory exists and move file there if provided
- */
-const ensureTeamDataDir = async (teamId: number, uploadedFilePath?: string, originalFileName?: string): Promise<string | undefined> => {
-  const teamDir = getTeamDataDir(teamId);
-  
-  if (!fs.existsSync(teamDir)) {
-    fs.mkdirSync(teamDir, { recursive: true });
-  }
-  
-  if (uploadedFilePath && originalFileName) {
-    const targetPath = path.join(teamDir, originalFileName);
-    fs.copyFileSync(uploadedFilePath, targetPath);
-    fs.unlinkSync(uploadedFilePath);
-    return teamDir;
-  }
-  
-  if (fs.existsSync(teamDir)) {
-    return teamDir;
-  }
-  
-  return undefined;
+const getContainerDataFilePath = (filePath: string, originalFileName?: string): string => {
+  const fileName = originalFileName || path.basename(filePath);
+  return path.posix.join(DATA_MOUNT_PATH, fileName);
 }
 
 /**
@@ -128,9 +116,6 @@ export const deploy = async (
   if (!team) {
     throw new NotFoundError('Team not found');
   }
-
-  // Organize uploaded file into team directory
-  const teamDataDir = await ensureTeamDataDir(teamId, dataFilePath, originalFileName);
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
@@ -234,8 +219,8 @@ export const deploy = async (
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB
-        Binds: teamDataDir
-          ? [`${teamDataDir}:${DATA_MOUNT_PATH}:ro`]
+        Binds: dataFilePath
+          ? [`${getHostDataFilePath(dataFilePath)}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
           : undefined,
       },
       NetworkingConfig: {
@@ -564,9 +549,6 @@ export const buildWithStreaming = async (
     throw new NotFoundError('Team not found');
   }
 
-  // Organize uploaded file into team directory
-  const teamDataDir = await ensureTeamDataDir(teamId, dataFilePath, originalFileName);
-
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
 
@@ -658,8 +640,8 @@ export const buildWithStreaming = async (
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
           Memory: 800 * 1024 * 1024, // 800MB
-          Binds: teamDataDir
-            ? [`${teamDataDir}:${DATA_MOUNT_PATH}:ro`]
+          Binds: dataFilePath
+            ? [`${getHostDataFilePath(dataFilePath)}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
             : undefined,
         },
         NetworkingConfig: {
