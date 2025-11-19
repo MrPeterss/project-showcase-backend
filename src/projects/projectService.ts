@@ -7,7 +7,7 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
-const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
+const DATA_MOUNT_PATH = '/var/www/data'; // Standardized base directory in container
 
 /**
  * Get the team data directory path
@@ -23,22 +23,17 @@ const getTeamDataDir = (teamId: number): string => {
 const ensureTeamDataDir = async (teamId: number, uploadedFilePath?: string, originalFileName?: string): Promise<string | undefined> => {
   const teamDir = getTeamDataDir(teamId);
   
-  // Create team directory if it doesn't exist
   if (!fs.existsSync(teamDir)) {
     fs.mkdirSync(teamDir, { recursive: true });
   }
   
-  // If a file was uploaded, move it to the team directory with its original name
   if (uploadedFilePath && originalFileName) {
     const targetPath = path.join(teamDir, originalFileName);
-    // Move the file (overwrite if exists)
     fs.copyFileSync(uploadedFilePath, targetPath);
-    // Remove the original uploaded file
     fs.unlinkSync(uploadedFilePath);
     return teamDir;
   }
   
-  // If no file uploaded but directory exists, return it anyway (for mounting existing files)
   if (fs.existsSync(teamDir)) {
     return teamDir;
   }
