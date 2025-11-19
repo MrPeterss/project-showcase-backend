@@ -10,17 +10,14 @@ const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
 
 // Get the host path for Docker bind mounts
-// If DATA_FILES_HOST_DIR is set, replace the container directory with the host directory
 const getHostDataFilePath = (filePath: string): string => {
   const containerDataDir = process.env.DATA_FILES_DIR || '/app/data/project-data-files';
   const hostDataDir = process.env.DATA_FILES_HOST_DIR;
   
   if (hostDataDir && filePath.startsWith(containerDataDir)) {
-    // Replace container directory with host directory
     return filePath.replace(containerDataDir, hostDataDir);
   }
   
-  // If no host directory is configured, use the file path as-is
   return filePath;
 };
 
