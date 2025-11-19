@@ -7,7 +7,9 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
-const DATA_MOUNT_PATH = '/var/www/data'; // Standardized mount path in container
+const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
+const getContainerDataFilePath = (filePath: string): string =>
+  path.posix.join(DATA_MOUNT_PATH, path.basename(filePath));
 
 /**
  * Extract repository name from GitHub URL
@@ -198,7 +200,9 @@ export const deploy = async (
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
         Memory: 800 * 1024 * 1024, // 800MB
-        Binds: dataFilePath ? [`${dataFilePath}:${DATA_MOUNT_PATH}:ro`] : undefined,
+        Binds: dataFilePath
+          ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath)}:ro`]
+          : undefined,
       },
       NetworkingConfig: {
         EndpointsConfig: {
@@ -616,7 +620,9 @@ export const buildWithStreaming = async (
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
           Memory: 800 * 1024 * 1024, // 800MB
-          Binds: dataFilePath ? [`${dataFilePath}:${DATA_MOUNT_PATH}:ro`] : undefined,
+          Binds: dataFilePath
+            ? [`${dataFilePath}:${getContainerDataFilePath(dataFilePath)}:ro`]
+            : undefined,
         },
         NetworkingConfig: {
           EndpointsConfig: {
