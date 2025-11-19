@@ -7,7 +7,7 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
-const DATA_MOUNT_PATH = '/var/www'; // Standardized mount path in container
+const DATA_MOUNT_PATH = '/var/www/data'; // Standardized mount path in container
 
 /**
  * Extract repository name from GitHub URL
