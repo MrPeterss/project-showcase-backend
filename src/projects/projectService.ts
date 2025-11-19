@@ -38,6 +38,13 @@ const extractRepoName = (githubUrl: string): string => {
 };
 
 /**
+ * Normalize container name: lowercase and replace spaces with dashes
+ */
+const normalizeContainerName = (name: string): string => {
+  return name.toLowerCase().replace(/\s+/g, '-');
+};
+
+/**
  * Ensure the projects network exists, create it if it doesn't
  */
 const ensureProjectsNetwork = async (): Promise<void> => {
@@ -131,7 +138,7 @@ export const deploy = async (
 
   try {
     // Stop and remove existing container with the same name if it exists
-    const containerName = team.name.toLowerCase();
+    const containerName = normalizeContainerName(team.name);
     
     // First try-catch: Stop the existing container
     try {
@@ -211,7 +218,7 @@ export const deploy = async (
     // Run the container with appropriate startup command
     const containerConfig: unknown = {
       Image: imageName,
-      name: `${team.name.toLowerCase()}`,
+      name: normalizeContainerName(team.name),
       HostConfig: {
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
@@ -223,7 +230,7 @@ export const deploy = async (
       NetworkingConfig: {
         EndpointsConfig: {
           [PROJECTS_NETWORK]: {
-            Aliases: [team.name.toLowerCase()],
+            Aliases: [normalizeContainerName(team.name)],
           },
         },
       },
@@ -566,7 +573,7 @@ export const buildWithStreaming = async (
   const initBuild = async () => {
     try {
       // Stop and remove existing container with the same name if it exists
-      const containerName = team.name.toLowerCase();
+      const containerName = normalizeContainerName(team.name);
       
       try {
         const existingContainer = docker.getContainer(containerName);
@@ -632,7 +639,7 @@ export const buildWithStreaming = async (
       // Run the container
       const containerConfig: unknown = {
         Image: imageName,
-        name: `${team.name.toLowerCase()}`,
+        name: normalizeContainerName(team.name),
         HostConfig: {
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
@@ -644,7 +651,7 @@ export const buildWithStreaming = async (
         NetworkingConfig: {
           EndpointsConfig: {
             [PROJECTS_NETWORK]: {
-              Aliases: [team.name.toLowerCase()],
+              Aliases: [normalizeContainerName(team.name)],
             },
           },
         },
