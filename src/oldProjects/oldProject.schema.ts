@@ -2,17 +2,7 @@ import { z } from 'zod';
 
 export const buildOldProjectSchema = z.object({
   body: z.object({
-    teamId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid team ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    teamId: z.number().int(),
     githubUrl: z
       .string()
       .url()
