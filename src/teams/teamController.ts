@@ -339,14 +339,7 @@ export const updateTeam = async (req: Request, res: Response) => {
       }
 
       // Check if user is enrolled in course offering
-      let enrollment = await prisma.courseOfferingEnrollment.findUnique({
-        where: {
-          userId_courseOfferingId: {
-            userId: user.id,
-            courseOfferingId: team.courseOfferingId,
-          },
-        },
-      });
+      let enrollment = await getHighestAccessEnrollment(user.id, team.courseOfferingId);
 
       // If not enrolled, enroll as STUDENT
       if (!enrollment) {
@@ -514,12 +507,10 @@ export const addTeamMembers = async (req: Request, res: Response) => {
     }
 
     // Check if user is enrolled in course offering
-    let enrollment = await prisma.courseOfferingEnrollment.findUnique({
+    let enrollment = await prisma.courseOfferingEnrollment.findFirst({
       where: {
-        userId_courseOfferingId: {
-          userId: user.id,
-          courseOfferingId: team.courseOfferingId,
-        },
+        userId: user.id,
+        courseOfferingId: team.courseOfferingId,
       },
     });
 
