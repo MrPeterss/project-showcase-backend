@@ -11,17 +11,40 @@ import {
   NotFoundError,
 } from '../utils/AppError.js';
 
-// Helper function to check if user is instructor of course offering
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  const enrollment = await prisma.courseOfferingEnrollment.findUnique({
+// Helper function to get enrollment with highest access level
+// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
+const getHighestAccessEnrollment = async (
+  userId: number,
+  offeringId: number,
+) => {
+  const enrollments = await prisma.courseOfferingEnrollment.findMany({
     where: {
-      userId_courseOfferingId: {
-        userId,
-        courseOfferingId: offeringId,
-      },
+      userId,
+      courseOfferingId: offeringId,
     },
   });
 
+  if (enrollments.length === 0) {
+    return null;
+  }
+
+  // If multiple enrollments exist, return the one with highest access level
+  const rolePriority: Record<CourseOfferingRole, number> = {
+    INSTRUCTOR: 3,
+    STUDENT: 2,
+    VIEWER: 1,
+  };
+
+  return enrollments.reduce((highest, current) => {
+    return rolePriority[current.role] > rolePriority[highest.role]
+      ? current
+      : highest;
+  });
+};
+
+// Helper function to check if user is instructor of course offering
+const checkInstructorAccess = async (userId: number, offeringId: number) => {
+  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
   return enrollment && enrollment.role === COURSE_OFFERING_ROLES.INSTRUCTOR;
 };
 
@@ -105,15 +128,9 @@ export const createCourseOfferingEnrollments = async (
     }
 
     // Check if already enrolled
-    const existingEnrollment = await prisma.courseOfferingEnrollment.findUnique(
-      {
-        where: {
-          userId_courseOfferingId: {
-            userId: user.id,
-            courseOfferingId: offeringId,
-          },
-        },
-      },
+    const existingEnrollment = await getHighestAccessEnrollment(
+      user.id,
+      offeringId,
     );
 
     if (existingEnrollment) {
@@ -236,14 +253,10 @@ export const updateCourseOfferingEnrollment = async (
   }
 
   // Check if enrollment exists
-  const existingEnrollment = await prisma.courseOfferingEnrollment.findUnique({
-    where: {
-      userId_courseOfferingId: {
-        userId: targetUserId,
-        courseOfferingId: offeringId,
-      },
-    },
-  });
+  const existingEnrollment = await getHighestAccessEnrollment(
+    targetUserId,
+    offeringId,
+  );
 
   if (!existingEnrollment) {
     throw new NotFoundError('Enrollment not found');
@@ -252,14 +265,23 @@ export const updateCourseOfferingEnrollment = async (
   const wasStudent = existingEnrollment.role === COURSE_OFFERING_ROLES.STUDENT;
   const willBeStudent = role === COURSE_OFFERING_ROLES.STUDENT;
 
-  const updatedEnrollment = await prisma.courseOfferingEnrollment.update({
+  // Delete all existing enrollments and create a new one with the updated role
+  // This handles both single and multiple enrollment cases
+  await prisma.courseOfferingEnrollment.deleteMany({
     where: {
-      userId_courseOfferingId: {
-        userId: targetUserId,
-        courseOfferingId: offeringId,
-      },
+      userId: targetUserId,
+      courseOfferingId: offeringId,
     },
-    data: { role: role as CourseOfferingRole },
+  });
+
+  // Create new enrollment with updated role
+  const updatedEnrollment = await prisma.courseOfferingEnrollment.create({
+    data: {
+      userId: targetUserId,
+      courseOfferingId: offeringId,
+      role: role as CourseOfferingRole,
+      referringCourseId: existingEnrollment.referringCourseId,
+    },
     include: {
       user: {
         select: { id: true, email: true, createdAt: true },
@@ -365,14 +387,10 @@ export const deleteCourseOfferingEnrollment = async (
   }
 
   // Check if enrollment exists
-  const existingEnrollment = await prisma.courseOfferingEnrollment.findUnique({
-    where: {
-      userId_courseOfferingId: {
-        userId: targetUserId,
-        courseOfferingId: offeringId,
-      },
-    },
-  });
+  const existingEnrollment = await getHighestAccessEnrollment(
+    targetUserId,
+    offeringId,
+  );
 
   if (!existingEnrollment) {
     throw new NotFoundError('Enrollment not found');
@@ -381,12 +399,11 @@ export const deleteCourseOfferingEnrollment = async (
   // If removing a student, also remove viewer enrollments they were given by this course
   const isStudent = existingEnrollment.role === COURSE_OFFERING_ROLES.STUDENT;
 
-  await prisma.courseOfferingEnrollment.delete({
+  // Delete all enrollments for this user/course combination
+  await prisma.courseOfferingEnrollment.deleteMany({
     where: {
-      userId_courseOfferingId: {
-        userId: targetUserId,
-        courseOfferingId: offeringId,
-      },
+      userId: targetUserId,
+      courseOfferingId: offeringId,
     },
   });
 

@@ -7,17 +7,40 @@ export enum CourseOfferingSettingKey {
   COURSE_VISIBILITY = 'course_visibility',
 }
 
-// Helper function to check if user is instructor of course offering
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  const enrollment = await prisma.courseOfferingEnrollment.findUnique({
+// Helper function to get enrollment with highest access level
+// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
+const getHighestAccessEnrollment = async (
+  userId: number,
+  offeringId: number,
+) => {
+  const enrollments = await prisma.courseOfferingEnrollment.findMany({
     where: {
-      userId_courseOfferingId: {
-        userId,
-        courseOfferingId: offeringId,
-      },
+      userId,
+      courseOfferingId: offeringId,
     },
   });
 
+  if (enrollments.length === 0) {
+    return null;
+  }
+
+  // If multiple enrollments exist, return the one with highest access level
+  const rolePriority: Record<string, number> = {
+    INSTRUCTOR: 3,
+    STUDENT: 2,
+    VIEWER: 1,
+  };
+
+  return enrollments.reduce((highest, current) => {
+    return rolePriority[current.role] > rolePriority[highest.role]
+      ? current
+      : highest;
+  });
+};
+
+// Helper function to check if user is instructor of course offering
+const checkInstructorAccess = async (userId: number, offeringId: number) => {
+  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
   return enrollment && enrollment.role === COURSE_OFFERING_ROLES.INSTRUCTOR;
 };
 
@@ -98,23 +121,20 @@ export const processCourseVisibilitySetting = async (
             userId: { in: studentIds },
             courseOfferingId: { in: removedCourses },
             role: COURSE_OFFERING_ROLES.VIEWER,
+            referringCourseId: offeringId,
           },
         },
       );
 
-      // Filter to only those with matching referringCourseId and delete them
-      const matchingEnrollments = enrollmentsToDelete.filter(
-        (enrollment) => enrollment.referringCourseId === offeringId,
-      );
-
       // Delete the matching enrollments
-      for (const enrollment of matchingEnrollments) {
-        await prisma.courseOfferingEnrollment.delete({
+      // Since we're filtering by referringCourseId in the query, we can delete directly
+      if (enrollmentsToDelete.length > 0) {
+        await prisma.courseOfferingEnrollment.deleteMany({
           where: {
-            userId_courseOfferingId: {
-              userId: enrollment.userId,
-              courseOfferingId: enrollment.courseOfferingId,
-            },
+            userId: { in: studentIds },
+            courseOfferingId: { in: removedCourses },
+            role: COURSE_OFFERING_ROLES.VIEWER,
+            referringCourseId: offeringId,
           },
         });
       }

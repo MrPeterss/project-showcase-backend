@@ -78,6 +78,7 @@ model Team {
 }
 
 model CourseOfferingEnrollment {
+  id                          Int            @id @default(autoincrement())
   role                        CourseOfferingRole
 
   user                        User           @relation(fields: [userId], references: [id])
@@ -86,8 +87,6 @@ model CourseOfferingEnrollment {
   courseOfferingId            Int
   referringCourseOffering     CourseOffering? @relation("referringCourseOffering", fields: [referringCourseId], references: [id])
   referringCourseId           Int?
-
-  @@id([userId, courseOfferingId])
 }
 
 model TeamMembership {

@@ -9,20 +9,44 @@ import {
   NotFoundError,
 } from '../utils/AppError.js';
 
+// Helper function to get enrollment with highest access level
+// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
+const getHighestAccessEnrollment = async (
+  userId: number,
+  offeringId: number,
+) => {
+  const enrollments = await prisma.courseOfferingEnrollment.findMany({
+    where: {
+      userId,
+      courseOfferingId: offeringId,
+    },
+  });
+
+  if (enrollments.length === 0) {
+    return null;
+  }
+
+  // If multiple enrollments exist, return the one with highest access level
+  const rolePriority: Record<string, number> = {
+    INSTRUCTOR: 3,
+    STUDENT: 2,
+    VIEWER: 1,
+  };
+
+  return enrollments.reduce((highest, current) => {
+    return rolePriority[current.role] > rolePriority[highest.role]
+      ? current
+      : highest;
+  });
+};
+
 // Helper function to check if user has access to course offering
 const checkCourseOfferingAccess = async (
   userId: number,
   offeringId: number,
   requiredRoles?: string[],
 ) => {
-  const enrollment = await prisma.courseOfferingEnrollment.findUnique({
-    where: {
-      userId_courseOfferingId: {
-        userId,
-        courseOfferingId: offeringId,
-      },
-    },
-  });
+  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
 
   if (!enrollment) {
     return null;
@@ -212,14 +236,7 @@ export const createTeam = async (req: Request, res: Response) => {
     }
 
     // Check if user is enrolled in course offering
-    let enrollment = await prisma.courseOfferingEnrollment.findUnique({
-      where: {
-        userId_courseOfferingId: {
-          userId: user.id,
-          courseOfferingId: offeringId,
-        },
-      },
-    });
+    let enrollment = await getHighestAccessEnrollment(user.id, offeringId);
 
     // If not enrolled, enroll as STUDENT
     if (!enrollment) {
