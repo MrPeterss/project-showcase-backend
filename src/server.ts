@@ -15,7 +15,6 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { userRateLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
-import oldProjectRouter from './oldProjects/oldProjectRouter.js';
 import projectRouter from './projects/projectRouter.js';
 import semesterRouter from './semesters/semesterRouter.js';
 import teamRouter from './teams/teamRouter.js';
@@ -69,7 +68,6 @@ router.use('/courses', courseRouter);
 router.use('/course-offerings', courseOfferingRouter);
 router.use('/enrollments', enrollmentRouter);
 router.use('/projects', projectRouter);
-router.use('/old-projects', oldProjectRouter);
 
 app.use(router);
 

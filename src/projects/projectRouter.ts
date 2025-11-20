@@ -2,7 +2,13 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 
+import { requireAdmin } from '../middleware/authentication.js';
 import { validateRequest } from '../middleware/validateRequest.js';
+import { buildOldProjectSchema } from '../oldProjects/oldProject.schema.js';
+import {
+  buildOldJsonController,
+  buildOldSqlController,
+} from '../oldProjects/oldProjectController.js';
 import {
   deployProjectSchema,
   getTeamProjectsSchema,
@@ -89,6 +95,21 @@ router.get(
   '/team/:teamId',
   validateRequest(getTeamProjectsSchema),
   getTeamProjectsController,
+);
+
+// Old project build routes
+router.post(
+  '/build-old-json',
+  requireAdmin,
+  validateRequest(buildOldProjectSchema),
+  buildOldJsonController,
+);
+
+router.post(
+  '/build-old-sql',
+  requireAdmin,
+  validateRequest(buildOldProjectSchema),
+  buildOldSqlController,
 );
 
 export default router;
