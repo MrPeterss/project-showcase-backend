@@ -45,6 +45,23 @@ const normalizeContainerName = (name: string): string => {
 };
 
 /**
+ * Get the git commit hash from a cloned repository directory.
+ * Returns the short commit hash (first 7 characters) for use as an image tag.
+ */
+const getCommitHashFromRepo = async (repoDir: string): Promise<string> => {
+  try {
+    // Use git with the -C flag to run in the specified directory
+    const commitHash = await git.raw(['-C', repoDir, 'rev-parse', 'HEAD']);
+    // Use short hash (first 7 characters) for cleaner tags
+    return commitHash.trim().substring(0, 7);
+  } catch (error) {
+    // If we can't get the commit hash, fall back to a timestamp-based tag
+    console.error('Error getting commit hash:', error);
+    throw new Error('Failed to get commit hash from repository');
+  }
+};
+
+/**
  * Ensure the projects network exists, create it if it doesn't
  */
 const ensureProjectsNetwork = async (): Promise<void> => {
@@ -556,12 +573,13 @@ export const buildWithStreaming = async (
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
 
-  // Create initial project record
+  // Create initial project record with placeholder imageName
+  // Will be updated with actual commit hash after cloning
   const project = await prisma.project.create({
     data: {
       teamId,
       githubUrl,
-      imageName: `${repoName}:latest`.toLowerCase(),
+      imageName: `${repoName.toLowerCase()}:pending`,
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
@@ -595,8 +613,17 @@ export const buildWithStreaming = async (
       // Clone the repository
       await git.clone(githubUrl, tempDir);
 
+      // Get the commit hash from the cloned repository
+      const commitHash = await getCommitHashFromRepo(tempDir);
+      const imageName = `${repoName.toLowerCase()}:${commitHash}`;
+
+      // Update project with the actual image name (commit hash)
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { imageName },
+      });
+
       // Build the image and get the stream
-      const imageName = `${repoName}:latest`.toLowerCase();
       const buildOptions: Record<string, unknown> = {
         t: imageName,
       };
@@ -628,7 +655,14 @@ export const buildWithStreaming = async (
 
   const completeBuild = async (buildLogsToStore: string[]) => {
     try {
-      const imageName = `${repoName}:latest`.toLowerCase();
+      // Get the current project to retrieve the imageName (with commit hash)
+      const currentProject = await prisma.project.findUnique({
+        where: { id: project.id },
+      });
+
+      if (!currentProject) {
+        throw new NotFoundError('Project not found');
+      }
 
       // Store build logs in database
       await prisma.project.update({
@@ -638,7 +672,7 @@ export const buildWithStreaming = async (
 
       // Run the container
       const containerConfig: unknown = {
-        Image: imageName,
+        Image: currentProject.imageName,
         name: normalizeContainerName(team.name),
         HostConfig: {
           AutoRemove: false,
