@@ -309,61 +309,9 @@ const pruneProject = async (project: {
 };
 
 /**
- * Prune stopped Docker containers
- */
-const pruneStoppedContainers = async (): Promise<{
-  containersDeleted: number;
-  spaceReclaimed: number;
-}> => {
-  try {
-    // Prune stopped containers
-    // This removes all stopped containers
-    const pruneResult = await docker.pruneContainers();
-
-    return {
-      containersDeleted: pruneResult.ContainersDeleted?.length || 0,
-      spaceReclaimed: pruneResult.SpaceReclaimed || 0,
-    };
-  } catch (error) {
-    console.error('Error pruning stopped containers:', error);
-    return {
-      containersDeleted: 0,
-      spaceReclaimed: 0,
-    };
-  }
-};
-
-/**
- * Prune dangling Docker images (images with no tags)
- */
-const pruneDanglingImages = async (): Promise<{
-  imagesDeleted: number;
-  spaceReclaimed: number;
-}> => {
-  try {
-    // Prune dangling images using Docker's prune API
-    const pruneResult = await docker.pruneImages({
-      filters: {
-        dangling: { true: true },
-      },
-    });
-
-    return {
-      imagesDeleted: pruneResult.ImagesDeleted?.length || 0,
-      spaceReclaimed: pruneResult.SpaceReclaimed || 0,
-    };
-  } catch (error) {
-    console.error('Error pruning dangling images:', error);
-    return {
-      imagesDeleted: 0,
-      spaceReclaimed: 0,
-    };
-  }
-};
-
-/**
  * Prune all untagged, non-running projects
  * Finds projects that are not running and have no tag, then removes their containers, images, and data files
+ * Only prunes resources that are associated with projects in the database
  * Returns statistics about the pruning operation
  */
 export const pruneUntaggedProjects = async (): Promise<{
@@ -371,23 +319,8 @@ export const pruneUntaggedProjects = async (): Promise<{
   successCount: number;
   errorCount: number;
   errors: Array<{ projectId: number; errors: string[] }>;
-  containersPruned: { containersDeleted: number; spaceReclaimed: number };
-  danglingImagesPruned: { imagesDeleted: number; spaceReclaimed: number };
 }> => {
   try {
-    // First, prune stopped containers
-    console.log('Pruning stopped containers...');
-    const containersResult = await pruneStoppedContainers();
-    console.log(
-      `Pruned ${containersResult.containersDeleted} stopped containers, reclaimed ${containersResult.spaceReclaimed} bytes`,
-    );
-
-    // Then, prune all dangling images
-    console.log('Pruning dangling images...');
-    const danglingImagesResult = await pruneDanglingImages();
-    console.log(
-      `Pruned ${danglingImagesResult.imagesDeleted} dangling images, reclaimed ${danglingImagesResult.spaceReclaimed} bytes`,
-    );
     // Get all projects that are not running and not already pruned
     // We'll filter for tag === null in memory due to TypeScript type issues
     const allNonRunningProjects = await prisma.project.findMany({
@@ -484,8 +417,6 @@ export const pruneUntaggedProjects = async (): Promise<{
       successCount,
       errorCount,
       errors,
-      containersPruned: containersResult,
-      danglingImagesPruned: danglingImagesResult,
     };
 
     console.log(

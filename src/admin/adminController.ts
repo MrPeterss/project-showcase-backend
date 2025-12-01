@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { docker } from '../docker.js';
+import { prisma } from '../prisma.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
 import * as adminService from './adminService.js';
 
@@ -46,12 +47,47 @@ export const triggerPruning = async (_req: Request, res: Response) => {
 
 export const getAllDockerContainers = async (_req: Request, res: Response) => {
   try {
+    // Get all project container IDs and names from database
+    const projects = await prisma.project.findMany({
+      where: {
+        containerId: { not: null },
+      },
+      select: {
+        containerId: true,
+        containerName: true,
+      },
+    });
+
+    const projectContainerIds = new Set(
+      projects
+        .map((p) => p.containerId)
+        .filter((id): id is string => id !== null),
+    );
+    const projectContainerNames = new Set(
+      projects
+        .map((p) => p.containerName)
+        .filter((name): name is string => name !== null)
+        .map((name) => name.startsWith('/') ? name : `/${name}`), // Docker names usually start with /
+    );
+
     // Get all containers (running and stopped)
     const containers = await docker.listContainers({ all: true });
     
+    // Filter to only containers associated with projects
+    const projectContainers = containers.filter((container) => {
+      const containerId = container.Id;
+      const containerNames = container.Names || [];
+      
+      // Check if container ID or name matches a project
+      return (
+        projectContainerIds.has(containerId) ||
+        containerNames.some((name) => projectContainerNames.has(name))
+      );
+    });
+    
     // Get detailed information for each container
     const containerDetails = await Promise.all(
-      containers.map(async (container) => {
+      projectContainers.map(async (container) => {
         try {
           const containerInfo = await docker.getContainer(container.Id).inspect();
           return {
@@ -114,12 +150,30 @@ export const getAllDockerContainers = async (_req: Request, res: Response) => {
 
 export const getAllDockerImages = async (_req: Request, res: Response) => {
   try {
+    // Get all project image names from database
+    const projects = await prisma.project.findMany({
+      select: {
+        imageName: true,
+      },
+    });
+
+    const projectImageNames = new Set(projects.map((p) => p.imageName));
+
     // Get all images
     const images = await docker.listImages({ all: true });
     
+    // Filter to only images associated with projects
+    // Match by repo tags (e.g., "repo:tag") or image ID
+    const projectImages = images.filter((image) => {
+      const repoTags = image.RepoTags || [];
+      
+      // Check if any repo tag matches a project image name
+      return repoTags.some((tag) => projectImageNames.has(tag));
+    });
+    
     // Get detailed information for each image
     const imageDetails = await Promise.all(
-      images.map(async (image) => {
+      projectImages.map(async (image) => {
         try {
           const imageInfo = await docker.getImage(image.Id).inspect();
           return {
@@ -176,6 +230,23 @@ export const getAllDockerImages = async (_req: Request, res: Response) => {
 
 export const getAllDataFiles = async (_req: Request, res: Response) => {
   try {
+    // Get all project data file paths from database
+    const projects = await prisma.project.findMany({
+      where: {
+        dataFile: { not: null },
+      },
+      select: {
+        dataFile: true,
+      },
+    });
+
+    const projectDataFiles = new Set(
+      projects
+        .map((p) => p.dataFile)
+        .filter((file): file is string => file !== null)
+        .map((file) => path.basename(file)), // Get just the filename
+    );
+
     // Use the container directory (server runs inside container)
     const dataDir =
       process.env.DATA_FILES_DIR || '/app/data/project-data-files';
@@ -193,10 +264,13 @@ export const getAllDataFiles = async (_req: Request, res: Response) => {
     // Read all files in the directory
     const files = fs.readdirSync(dataDir, { withFileTypes: true });
 
+    // Filter to only files associated with projects
+    const projectFiles = files.filter(
+      (file) => file.isFile() && projectDataFiles.has(file.name),
+    );
+
     // Get detailed information for each file
-    const fileDetails = files
-      .filter((file) => file.isFile())
-      .map((file) => {
+    const fileDetails = projectFiles.map((file) => {
         const filePath = path.join(dataDir, file.name);
         try {
           const stats = fs.statSync(filePath);
@@ -267,6 +341,21 @@ export const stopContainer = async (req: Request, res: Response) => {
   try {
     const { containerId } = req.params;
 
+    // Verify container is associated with a project
+    const project = await prisma.project.findFirst({
+      where: {
+        containerId: containerId,
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: 'Container not found',
+        message: 'This container is not associated with any project in the database',
+        containerId,
+      });
+    }
+
     const container = docker.getContainer(containerId);
 
     // Try to stop the container
@@ -303,6 +392,21 @@ export const stopContainer = async (req: Request, res: Response) => {
 export const removeContainer = async (req: Request, res: Response) => {
   try {
     const { containerId } = req.params;
+
+    // Verify container is associated with a project
+    const project = await prisma.project.findFirst({
+      where: {
+        containerId: containerId,
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: 'Container not found',
+        message: 'This container is not associated with any project in the database',
+        containerId,
+      });
+    }
 
     const container = docker.getContainer(containerId);
 
@@ -345,6 +449,45 @@ export const removeImage = async (req: Request, res: Response) => {
   try {
     const { imageId } = req.params;
 
+    // Get image info to find its repo tags
+    let repoTags: string[] = [];
+    try {
+      const image = docker.getImage(imageId);
+      const imageInfo = await image.inspect();
+      repoTags = imageInfo.RepoTags || [];
+    } catch {
+      return res.status(404).json({
+        error: 'Image not found',
+        message: 'Could not find or inspect the specified image',
+        imageId,
+      });
+    }
+
+    // Verify image is associated with a project by checking if any repo tag matches a project's imageName
+    if (repoTags.length === 0) {
+      return res.status(404).json({
+        error: 'Image not found',
+        message: 'This image has no tags and is not associated with any project in the database',
+        imageId,
+      });
+    }
+
+    const project = await prisma.project.findFirst({
+      where: {
+        imageName: {
+          in: repoTags,
+        },
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: 'Image not found',
+        message: 'This image is not associated with any project in the database',
+        imageId,
+      });
+    }
+
     const image = docker.getImage(imageId);
 
     try {
@@ -380,6 +523,23 @@ export const removeImage = async (req: Request, res: Response) => {
 export const removeDataFile = async (req: Request, res: Response) => {
   try {
     const { fileName } = req.params;
+
+    // Verify file is associated with a project
+    const project = await prisma.project.findFirst({
+      where: {
+        dataFile: {
+          endsWith: fileName,
+        },
+      },
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        error: 'File not found',
+        message: 'This file is not associated with any project in the database',
+        fileName,
+      });
+    }
 
     // Use the container directory (server runs inside container)
     const dataDir =
