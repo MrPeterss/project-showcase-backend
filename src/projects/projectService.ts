@@ -137,6 +137,44 @@ export const deploy = async (
   });
 
   try {
+    // Find and stop any running projects for this team
+    const runningProjects = await prisma.project.findMany({
+      where: {
+        teamId,
+        status: 'running',
+      },
+      select: {
+        id: true,
+        containerId: true,
+      },
+    });
+
+    // Stop all running containers for this team
+    for (const runningProject of runningProjects) {
+      if (runningProject.containerId) {
+        try {
+          const container = docker.getContainer(runningProject.containerId);
+          await container.stop();
+          
+          // Update project status to stopped
+          await prisma.project.update({
+            where: { id: runningProject.id },
+            data: {
+              status: 'stopped',
+              stoppedAt: new Date(),
+            },
+          });
+          console.log(`Stopped running container for project ${runningProject.id}`);
+        } catch (error) {
+          // Continue even if stop fails (container might not exist)
+          console.log(
+            `Failed to stop container ${runningProject.containerId}:`,
+            error,
+          );
+        }
+      }
+    }
+
     // Stop and remove existing container with the same name if it exists
     const containerName = normalizeContainerName(team.name);
     
@@ -573,6 +611,43 @@ export const buildWithStreaming = async (
   // This will be populated with the actual docker build stream
   const initBuild = async () => {
     try {
+      // Find and stop any running projects for this team
+      const runningProjects = await prisma.project.findMany({
+        where: {
+          teamId,
+          status: 'running',
+        },
+        select: {
+          id: true,
+          containerId: true,
+        },
+      });
+
+      // Stop all running containers for this team
+      for (const runningProject of runningProjects) {
+        if (runningProject.containerId) {
+          try {
+            const container = docker.getContainer(runningProject.containerId);
+            await container.stop();
+            
+            // Update project status to stopped
+            await prisma.project.update({
+              where: { id: runningProject.id },
+              data: {
+                status: 'stopped',
+                stoppedAt: new Date(),
+              },
+            });
+          } catch (error) {
+            // Continue even if stop fails (container might not exist)
+            console.log(
+              `Failed to stop container ${runningProject.containerId}:`,
+              error,
+            );
+          }
+        }
+      }
+
       // Stop and remove existing container with the same name if it exists
       const containerName = normalizeContainerName(team.name);
       
