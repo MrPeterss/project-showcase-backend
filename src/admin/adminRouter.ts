@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { getAllImages, getRunningContainers } from '../projects/projectController.js';
-import { demoteUser, promoteUser } from './adminController.js';
+import { demoteUser, promoteUser, triggerPruning } from './adminController.js';
 
 const router = Router();
 
@@ -20,6 +20,9 @@ router.get('/audit-logs', (_req, res) => {
 // Docker info routes
 router.get('/projects/containers', getRunningContainers);
 router.get('/projects/images', getAllImages);
+
+// Project management routes
+router.post('/projects/prune', triggerPruning);
 
 // User admin management routes
 router.post('/users/:userId/promote', promoteUser);

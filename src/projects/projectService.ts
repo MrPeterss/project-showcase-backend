@@ -7,7 +7,7 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
-const DATA_MOUNT_PATH = '/var/www'; // Standardized base directory in container
+const DATA_MOUNT_PATH = '/var/www';
 
 // Get the host path for Docker bind mounts
 const getHostDataFilePath = (filePath: string): string => {
@@ -717,12 +717,30 @@ export const buildWithStreaming = async (
 /**
  * Tag the most recent running project image for all teams in a course offering.
  * Only tags projects that are currently running.
- * Updates the project's tag field in the database.
+ * Updates the project's tag field in the database and adds tag to course offering settings.
  */
 export const tagCourseOfferingProjects = async (
   courseOfferingId: number,
   tag: string,
 ) => {
+  // Get course offering to check settings
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: courseOfferingId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Get current settings
+  const settings = (courseOffering.settings as Record<string, unknown>) || {};
+  const tags = Array.isArray(settings.tags) ? (settings.tags as string[]) : [];
+
+  // Check for duplicate tag
+  if (tags.includes(tag)) {
+    throw new BadRequestError(`Tag "${tag}" already exists for this course offering`);
+  }
+
   // Get all teams for this course offering
   const teams = await prisma.team.findMany({
     where: { courseOfferingId },
@@ -765,12 +783,13 @@ export const tagCourseOfferingProjects = async (
       await image.tag({ repo: baseImageName, tag });
 
       // Update the project's tag and imageName fields in the database
+      // Use type assertion for tag field (TypeScript cache issue)
       await prisma.project.update({
         where: { id: mostRecentProject.id },
         data: {
           tag,
           imageName: newImageName,
-        },
+        } as { tag: string; imageName: string },
       });
 
       tagged++;
@@ -782,5 +801,122 @@ export const tagCourseOfferingProjects = async (
     }
   }
 
+  // Add tag to course offering settings
+  const updatedTags = [...tags, tag];
+  await prisma.courseOffering.update({
+    where: { id: courseOfferingId },
+    data: {
+      settings: {
+        ...settings,
+        tags: updatedTags,
+      },
+    },
+  });
+
   return { tagged, skipped, errors };
+};
+
+/**
+ * Remove a tag from all projects in a course offering.
+ * Sets the project's tag field to null and updates imageName back to latest.
+ * Removes tag from course offering settings.
+ */
+export const removeTagFromCourseOfferingProjects = async (
+  courseOfferingId: number,
+  tag: string,
+) => {
+  // Get course offering to check settings
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: courseOfferingId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Get current settings
+  const settings = (courseOffering.settings as Record<string, unknown>) || {};
+  const tags = Array.isArray(settings.tags) ? (settings.tags as string[]) : [];
+
+  // Check if tag exists
+  if (!tags.includes(tag)) {
+    throw new NotFoundError(`Tag "${tag}" not found for this course offering`);
+  }
+
+  // Get all teams for this course offering
+  const teams = await prisma.team.findMany({
+    where: { courseOfferingId },
+    include: {
+      projects: {
+        orderBy: { deployedAt: 'desc' },
+      },
+    },
+  });
+
+  // Filter projects that have the specified tag
+  const projectsWithTag: Array<{
+    id: number;
+    teamId: number;
+    imageName: string;
+  }> = [];
+  for (const team of teams) {
+    for (const project of team.projects) {
+      // Use type assertion to access tag field (TypeScript cache issue)
+      const projectTag = (project as { tag?: string | null }).tag;
+      if (projectTag === tag) {
+        projectsWithTag.push({
+          id: project.id,
+          teamId: team.id,
+          imageName: project.imageName,
+        });
+      }
+    }
+  }
+
+  let untagged = 0;
+  let skipped = 0;
+  const errors: Array<{ teamId: number; error: string }> = [];
+
+  if (projectsWithTag.length === 0) {
+    skipped++;
+  }
+
+  for (const project of projectsWithTag) {
+    try {
+      // Extract the base image name (without tag)
+      const baseImageName = project.imageName.split(':')[0];
+      const newImageName = `${baseImageName}:latest`;
+
+      // Update the project's tag to null and imageName back to latest
+      // Use type assertion for tag field (TypeScript cache issue)
+      await prisma.project.update({
+        where: { id: project.id },
+        data: {
+          tag: null,
+          imageName: newImageName,
+        } as { tag: null; imageName: string },
+      });
+
+      untagged++;
+    } catch (error) {
+      errors.push({
+        teamId: project.teamId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  // Remove tag from course offering settings
+  const updatedTags = tags.filter((t) => t !== tag);
+  await prisma.courseOffering.update({
+    where: { id: courseOfferingId },
+    data: {
+      settings: {
+        ...settings,
+        tags: updatedTags,
+      },
+    },
+  });
+
+  return { untagged, skipped, errors };
 };

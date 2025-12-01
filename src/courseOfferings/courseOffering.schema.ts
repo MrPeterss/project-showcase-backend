@@ -56,3 +56,22 @@ export const tagCourseOfferingProjectsSchema = z.object({
     tag: z.string().min(1, 'Tag is required and must be a non-empty string'),
   }),
 });
+
+export const removeTagFromCourseOfferingProjectsSchema = z.object({
+  params: z.object({
+    offeringId: z.string().transform((val, ctx) => {
+      const parsed = parseInt(val, 10);
+      if (isNaN(parsed)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Invalid offering ID',
+        });
+        return z.NEVER;
+      }
+      return parsed;
+    }),
+  }),
+  body: z.object({
+    tag: z.string().min(1, 'Tag is required and must be a non-empty string'),
+  }),
+});

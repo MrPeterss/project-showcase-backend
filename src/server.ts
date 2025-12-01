@@ -15,6 +15,12 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/logger.js';
 import { userRateLimiter } from './middleware/rateLimit.js';
 import { prisma } from './prisma.js';
+import {
+  startContainerMonitor,
+  startProjectPruner,
+  stopContainerMonitor,
+  stopProjectPruner,
+} from './projects/containerMonitor.js';
 import projectRouter from './projects/projectRouter.js';
 import semesterRouter from './semesters/semesterRouter.js';
 import teamRouter from './teams/teamRouter.js';
@@ -87,11 +93,23 @@ const server = app.listen(port, async () => {
     console.error('Failed to connect to database:', error);
     process.exit(1);
   }
+
+  // Start container monitoring cron job
+  startContainerMonitor();
+
+  // Start project pruning cron job
+  startProjectPruner();
 });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
   console.log('Shutting down gracefully...');
+
+  // Stop container monitoring cron job
+  stopContainerMonitor();
+
+  // Stop project pruning cron job
+  stopProjectPruner();
 
   server.close(async () => {
     console.log('HTTP server closed');

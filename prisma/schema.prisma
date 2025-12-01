@@ -119,4 +119,6 @@ model Project {
   teamId       Int
   deployedBy   User? @relation(fields: [deployedById], references: [id])
   deployedById Int?
+
+  @@index([status])
 }

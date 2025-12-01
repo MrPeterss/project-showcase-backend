@@ -26,6 +26,7 @@ import {
   courseOfferingParamsSchema,
   courseOfferingQuerySchema,
   createCourseOfferingSchema,
+  removeTagFromCourseOfferingProjectsSchema,
   tagCourseOfferingProjectsSchema,
   updateCourseOfferingSchema,
 } from './courseOffering.schema.js';
@@ -34,6 +35,7 @@ import {
   deleteCourseOffering,
   getAllCourseOfferings,
   getCourseOffering,
+  removeTagFromCourseOfferingProjects,
   tagCourseOfferingProjects,
   updateCourseOffering,
 } from './courseOfferingController.js';
@@ -121,11 +123,17 @@ router.get(
   getMyTeamsInOffering,
 );
 
-// Project tagging route (admin or instructor)
+// Project tagging routes (admin or instructor)
 router.post(
   '/:offeringId/projects/tag',
   validateRequest(tagCourseOfferingProjectsSchema),
   tagCourseOfferingProjects,
+);
+
+router.delete(
+  '/:offeringId/projects/tag',
+  validateRequest(removeTagFromCourseOfferingProjectsSchema),
+  removeTagFromCourseOfferingProjects,
 );
 
 export default router;
