@@ -468,16 +468,20 @@ export const removeImage = async (req: Request, res: Response) => {
     }
 
     // Verify image is associated with a project by checking if the image hash matches
-    const project = await prisma.project.findFirst({
+    // First try exact match
+    let matchingProject = await prisma.project.findFirst({
       where: {
         imageHash: {
           equals: imageHash,
         },
       },
+      select: {
+        id: true,
+        imageHash: true,
+      },
     });
 
-    // Also check if any project's hash matches this image ID (handles partial matches)
-    let matchingProject = project;
+    // If no exact match, check for partial matches (handles short/long hash variations)
     if (!matchingProject) {
       const allProjects = await prisma.project.findMany({
         select: {
