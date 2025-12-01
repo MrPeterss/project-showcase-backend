@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 
 import { COURSE_OFFERING_ROLES, SYSTEM_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
+import { tagCourseOfferingProjects as tagProjectsService } from '../projects/projectService.js';
 import {
   ConflictError,
   ForbiddenError,
@@ -343,4 +344,38 @@ export const deleteCourseOffering = async (req: Request, res: Response) => {
   });
 
   return res.status(204).send();
+};
+
+// POST /course-offerings/:offeringId/projects/tag
+export const tagCourseOfferingProjects = async (req: Request, res: Response) => {
+  const { userId, isAdmin } = req.user!;
+  // Validation middleware ensures these are valid
+  const offeringId = parseInt(req.params.offeringId, 10);
+  const { tag } = req.body;
+
+  // Check if course offering exists
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: offeringId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Check permissions - admin or instructor of the offering
+  if (!isAdmin) {
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
+      throw new ForbiddenError(
+        'Only admins or instructors of the course offering can tag projects',
+      );
+    }
+  }
+
+  const result = await tagProjectsService(offeringId, tag);
+
+  return res.json({
+    message: 'Projects tagged successfully',
+    result,
+  });
 };

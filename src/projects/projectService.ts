@@ -45,23 +45,6 @@ const normalizeContainerName = (name: string): string => {
 };
 
 /**
- * Get the git commit hash from a cloned repository directory.
- * Returns the short commit hash (first 7 characters) for use as an image tag.
- */
-const getCommitHashFromRepo = async (repoDir: string): Promise<string> => {
-  try {
-    // Use git with the -C flag to run in the specified directory
-    const commitHash = await git.raw(['-C', repoDir, 'rev-parse', 'HEAD']);
-    // Use short hash (first 7 characters) for cleaner tags
-    return commitHash.trim().substring(0, 7);
-  } catch (error) {
-    // If we can't get the commit hash, fall back to a timestamp-based tag
-    console.error('Error getting commit hash:', error);
-    throw new Error('Failed to get commit hash from repository');
-  }
-};
-
-/**
  * Ensure the projects network exists, create it if it doesn't
  */
 const ensureProjectsNetwork = async (): Promise<void> => {
@@ -572,14 +555,14 @@ export const buildWithStreaming = async (
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
+  const imageName = `${repoName.toLowerCase()}:latest`;
 
-  // Create initial project record with placeholder imageName
-  // Will be updated with actual commit hash after cloning
+  // Create initial project record
   const project = await prisma.project.create({
     data: {
       teamId,
       githubUrl,
-      imageName: `${repoName.toLowerCase()}:pending`,
+      imageName,
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
@@ -612,16 +595,6 @@ export const buildWithStreaming = async (
 
       // Clone the repository
       await git.clone(githubUrl, tempDir);
-
-      // Get the commit hash from the cloned repository
-      const commitHash = await getCommitHashFromRepo(tempDir);
-      const imageName = `${repoName.toLowerCase()}:${commitHash}`;
-
-      // Update project with the actual image name (commit hash)
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { imageName },
-      });
 
       // Build the image and get the stream
       const buildOptions: Record<string, unknown> = {
@@ -739,4 +712,71 @@ export const buildWithStreaming = async (
     initBuild,
     completeBuild,
   };
+};
+
+/**
+ * Tag the most recent running project image for all teams in a course offering.
+ * Only tags projects that are currently running.
+ * Updates the project's tag field in the database.
+ */
+export const tagCourseOfferingProjects = async (
+  courseOfferingId: number,
+  tag: string,
+) => {
+  // Get all teams for this course offering
+  const teams = await prisma.team.findMany({
+    where: { courseOfferingId },
+    include: {
+      projects: {
+        orderBy: { deployedAt: 'desc' },
+        take: 1, // Get only the most recent project
+      },
+    },
+  });
+
+  let tagged = 0;
+  let skipped = 0;
+  const errors: Array<{ teamId: number; error: string }> = [];
+
+  for (const team of teams) {
+    // Check if team has any projects
+    if (team.projects.length === 0) {
+      skipped++;
+      continue;
+    }
+
+    const mostRecentProject = team.projects[0];
+
+    // Only tag if the project is running
+    if (mostRecentProject.status !== 'running') {
+      skipped++;
+      continue;
+    }
+
+    try {
+      // Get the Docker image
+      const image = docker.getImage(mostRecentProject.imageName);
+
+      // Extract the base image name (without tag)
+      const baseImageName = mostRecentProject.imageName.split(':')[0];
+
+      // Tag the image
+      await image.tag({ repo: baseImageName, tag });
+
+      // Update the project's tag field in the database
+      await prisma.project.update({
+        where: { id: mostRecentProject.id },
+        data: { tag },
+      });
+
+      tagged++;
+    } catch (error) {
+      errors.push({
+        teamId: team.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return { tagged, skipped, errors };
 };

@@ -58,9 +58,9 @@ model CourseOffering {
   semester   Semester @relation(fields: [semesterId], references: [id])
   semesterId Int
 
-  enrollments CourseOfferingEnrollment[]        @relation("courseOffering")
+  enrollments         CourseOfferingEnrollment[] @relation("courseOffering")
   referredEnrollments CourseOfferingEnrollment[] @relation("referringCourseOffering")
-  teams       Team[]
+  teams               Team[]
 
   @@unique([courseId, semesterId])
 }
@@ -78,15 +78,15 @@ model Team {
 }
 
 model CourseOfferingEnrollment {
-  id                          Int            @id @default(autoincrement())
-  role                        CourseOfferingRole
+  id   Int                @id @default(autoincrement())
+  role CourseOfferingRole
 
-  user                        User           @relation(fields: [userId], references: [id])
-  userId                      Int
-  courseOffering              CourseOffering @relation("courseOffering", fields: [courseOfferingId], references: [id])
-  courseOfferingId            Int
-  referringCourseOffering     CourseOffering? @relation("referringCourseOffering", fields: [referringCourseId], references: [id])
-  referringCourseId           Int?
+  user                    User            @relation(fields: [userId], references: [id])
+  userId                  Int
+  courseOffering          CourseOffering  @relation("courseOffering", fields: [courseOfferingId], references: [id])
+  courseOfferingId        Int
+  referringCourseOffering CourseOffering? @relation("referringCourseOffering", fields: [referringCourseId], references: [id])
+  referringCourseId       Int?
 }
 
 model TeamMembership {
@@ -102,21 +102,21 @@ model Project {
   id            Int       @id @default(autoincrement())
   githubUrl     String
   imageName     String
-  tag           String?   // keep imageName for versioning
+  tag           String? // keep imageName for versioning
   containerId   String?   @unique
   containerName String?
-  status        String    // running, stopped, failed, etc.
-  ports         Json?     // Store port mappings as JSON
-  buildLogs     String?   // Store build logs as text
-  buildArgs     Json?     // Store build arguments as JSON
-  dataFile      String?   // Path to uploaded data file on host
+  status        String // running, stopped, failed, etc.
+  ports         Json? // Store port mappings as JSON
+  buildLogs     String? // Store build logs as text
+  buildArgs     Json? // Store build arguments as JSON
+  dataFile      String? // Path to uploaded data file on host
   deployedAt    DateTime  @default(now())
   stoppedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  team       Team @relation(fields: [teamId], references: [id])
-  teamId     Int
-  deployedBy User? @relation(fields: [deployedById], references: [id])
+  team         Team  @relation(fields: [teamId], references: [id])
+  teamId       Int
+  deployedBy   User? @relation(fields: [deployedById], references: [id])
   deployedById Int?
 }
