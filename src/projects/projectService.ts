@@ -759,14 +759,18 @@ export const tagCourseOfferingProjects = async (
 
       // Extract the base image name (without tag)
       const baseImageName = mostRecentProject.imageName.split(':')[0];
+      const newImageName = `${baseImageName}:${tag}`;
 
       // Tag the image
       await image.tag({ repo: baseImageName, tag });
 
-      // Update the project's tag field in the database
+      // Update the project's tag and imageName fields in the database
       await prisma.project.update({
         where: { id: mostRecentProject.id },
-        data: { tag },
+        data: {
+          tag,
+          imageName: newImageName,
+        },
       });
 
       tagged++;
