@@ -176,12 +176,9 @@ export const getAllDockerImages = async (_req: Request, res: Response) => {
 
 export const getAllDataFiles = async (_req: Request, res: Response) => {
   try {
-    // Determine the data files directory
-    // Use host directory if set, otherwise use container directory
-    const hostDataDir = process.env.DATA_FILES_HOST_DIR;
-    const containerDataDir =
+    // Use the container directory (server runs inside container)
+    const dataDir =
       process.env.DATA_FILES_DIR || '/app/data/project-data-files';
-    const dataDir = hostDataDir || containerDataDir;
 
     // Check if directory exists
     if (!fs.existsSync(dataDir)) {
@@ -384,11 +381,9 @@ export const removeDataFile = async (req: Request, res: Response) => {
   try {
     const { fileName } = req.params;
 
-    // Determine the data files directory
-    const hostDataDir = process.env.DATA_FILES_HOST_DIR;
-    const containerDataDir =
+    // Use the container directory (server runs inside container)
+    const dataDir =
       process.env.DATA_FILES_DIR || '/app/data/project-data-files';
-    const dataDir = hostDataDir || containerDataDir;
 
     // Construct the full file path
     const filePath = path.join(dataDir, fileName);
