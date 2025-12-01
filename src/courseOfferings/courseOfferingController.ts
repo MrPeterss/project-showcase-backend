@@ -154,7 +154,7 @@ export const getCourseOffering = async (req: Request, res: Response) => {
             select: {
               id: true,
               githubUrl: true,
-              imageName: true,
+              imageHash: true,
               containerId: true,
               containerName: true,
               status: true,

@@ -140,7 +140,7 @@ const getHostDataFilePath = (filePath: string): string => {
 const pruneProject = async (project: {
   id: number;
   containerId: string | null;
-  imageName: string;
+  imageHash: string;
   dataFile: string | null;
 }) => {
   const errors: string[] = [];
@@ -180,38 +180,24 @@ const pruneProject = async (project: {
     }
   }
 
-  // Remove Docker image (skip if image has "latest" tag)
-  if (project.imageName.endsWith(':latest')) {
-    // Skip removal of images with "latest" tag
+  // Remove Docker image by hash
+  // If image removal fails due to conflict (409), find and remove containers using it
+  try {
+    const image = docker.getImage(project.imageHash);
+    await image.remove();
     imageRemoved = true;
-  } else {
-    // If image removal fails due to conflict (409), find and remove containers using it
-    try {
-      const image = docker.getImage(project.imageName);
-      await image.remove();
-      imageRemoved = true;
-    } catch (error) {
+  } catch (error) {
     const statusCode = (error as { statusCode?: number }).statusCode;
     if (statusCode === 409) {
       // Image is in use by a container - find and remove all containers using this image
       try {
         const allContainers = await docker.listContainers({ all: true });
-        
-        // Get the image ID to match against container ImageID
-        let imageId: string | null = null;
-        try {
-          const imageInfo = await docker.getImage(project.imageName).inspect();
-          imageId = imageInfo.Id;
-        } catch {
-          // If we can't inspect, we'll match by image name only
-        }
 
-        // Find containers using this image (match by Image name or ImageID)
+        // Find containers using this image (match by ImageID)
         const containersUsingImage = allContainers.filter((container) => {
           return (
-            container.Image === project.imageName ||
-            (imageId && container.ImageID?.startsWith(imageId)) ||
-            (imageId && imageId.startsWith(container.ImageID || ''))
+            container.ImageID?.startsWith(project.imageHash) ||
+            project.imageHash.startsWith(container.ImageID || '')
           );
         });
 
@@ -239,7 +225,7 @@ const pruneProject = async (project: {
 
         // Retry removing the image after removing containers
         try {
-          const image = docker.getImage(project.imageName);
+          const image = docker.getImage(project.imageHash);
           await image.remove();
           imageRemoved = true;
         } catch (retryError) {
@@ -265,7 +251,6 @@ const pruneProject = async (project: {
     } else {
       // 404 means image doesn't exist, which is fine
       imageRemoved = true;
-    }
     }
   }
 
@@ -346,7 +331,7 @@ export const pruneUntaggedProjects = async (): Promise<{
       .map((project) => ({
         id: project.id,
         containerId: project.containerId,
-        imageName: project.imageName,
+        imageHash: project.imageHash,
         dataFile: project.dataFile,
       }));
 
@@ -364,7 +349,7 @@ export const pruneUntaggedProjects = async (): Promise<{
       select: {
         id: true,
         containerId: true,
-        imageName: true,
+        imageHash: true,
         dataFile: true,
       },
     });

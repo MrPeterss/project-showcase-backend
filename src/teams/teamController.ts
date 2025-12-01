@@ -105,7 +105,7 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
         select: {
           id: true,
           githubUrl: true,
-          imageName: true,
+          imageHash: true,
           containerId: true,
           containerName: true,
           status: true,
@@ -150,7 +150,7 @@ export const getTeam = async (req: Request, res: Response) => {
         select: {
           id: true,
           githubUrl: true,
-          imageName: true,
+          imageHash: true,
           containerId: true,
           containerName: true,
           status: true,
@@ -650,7 +650,7 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
             select: {
               id: true,
               githubUrl: true,
-              imageName: true,
+              imageHash: true,
               containerId: true,
               containerName: true,
               status: true,

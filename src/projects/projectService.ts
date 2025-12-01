@@ -129,7 +129,7 @@ export const deploy = async (
     data: {
       teamId,
       githubUrl,
-      imageName: `${repoName}:latest`.toLowerCase(),
+      imageHash: '', // Will be set after build
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
@@ -247,15 +247,24 @@ export const deploy = async (
       );
     });
 
-    // Store build logs in database
+    // Get the image hash after build
+    const builtImage = docker.getImage(imageName);
+    const imageInfo = await builtImage.inspect();
+    const imageHash = imageInfo.Id; // This is the full image ID (sha256:...)
+
+    // Store build logs and image hash in database
     await prisma.project.update({
       where: { id: project.id },
-      data: { buildLogs: buildLogLines.join('') },
+      data: {
+        buildLogs: buildLogLines.join(''),
+        imageHash,
+      },
     });
 
-    // Run the container with appropriate startup command
-    const containerConfig: unknown = {
-      Image: imageName,
+      // Run the container with appropriate startup command
+      // Use imageHash directly - Docker accepts image IDs
+      const containerConfig: unknown = {
+        Image: imageHash,
       name: normalizeContainerName(team.name),
       HostConfig: {
         AutoRemove: false,
@@ -299,7 +308,7 @@ export const deploy = async (
     return {
       success: true,
       project: updatedProject,
-      imageName,
+      imageHash,
       containerId: container.id,
       containerName: containerInfo.Name,
       ports: containerInfo.NetworkSettings.Ports,
@@ -562,7 +571,7 @@ export const streamBuildLogs = async (projectId: number) => {
       id: project.id,
       status: project.status,
       githubUrl: project.githubUrl,
-      imageName: project.imageName,
+      imageHash: project.imageHash,
       team: project.team,
       deployedAt: project.deployedAt,
     },
@@ -600,7 +609,7 @@ export const buildWithStreaming = async (
     data: {
       teamId,
       githubUrl,
-      imageName,
+      imageHash: '', // Will be set after build
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
@@ -703,24 +712,24 @@ export const buildWithStreaming = async (
 
   const completeBuild = async (buildLogsToStore: string[]) => {
     try {
-      // Get the current project to retrieve the imageName (with commit hash)
-      const currentProject = await prisma.project.findUnique({
-        where: { id: project.id },
-      });
+      // Get the image hash after build
+      const builtImage = docker.getImage(imageName);
+      const imageInfo = await builtImage.inspect();
+      const imageHash = imageInfo.Id; // This is the full image ID (sha256:...)
 
-      if (!currentProject) {
-        throw new NotFoundError('Project not found');
-      }
-
-      // Store build logs in database
+      // Store build logs and image hash in database
       await prisma.project.update({
         where: { id: project.id },
-        data: { buildLogs: buildLogsToStore.join('') },
+        data: {
+          buildLogs: buildLogsToStore.join(''),
+          imageHash,
+        },
       });
 
       // Run the container
+      // Use imageHash directly - Docker accepts image IDs
       const containerConfig: unknown = {
-        Image: currentProject.imageName,
+        Image: imageHash,
         name: normalizeContainerName(team.name),
         HostConfig: {
           AutoRemove: false,
@@ -781,7 +790,7 @@ export const buildWithStreaming = async (
       id: project.id,
       teamId: project.teamId,
       githubUrl: project.githubUrl,
-      imageName: project.imageName,
+      imageHash: project.imageHash,
       status: project.status,
     },
     initBuild,
@@ -847,24 +856,26 @@ export const tagCourseOfferingProjects = async (
     }
 
     try {
-      // Get the Docker image
-      const image = docker.getImage(mostRecentProject.imageName);
+      // Get the Docker image by hash
+      const image = docker.getImage(mostRecentProject.imageHash);
 
-      // Extract the base image name (without tag)
-      const baseImageName = mostRecentProject.imageName.split(':')[0];
-      const newImageName = `${baseImageName}:${tag}`;
+      // Get image info to find repo name
+      const imageInfo = await image.inspect();
+      const repoTags = imageInfo.RepoTags || [];
+      const baseRepoName = repoTags.length > 0 
+        ? repoTags[0].split(':')[0] 
+        : `project-${mostRecentProject.id}`;
 
-      // Tag the image
-      await image.tag({ repo: baseImageName, tag });
+      // Tag the image with the new tag
+      await image.tag({ repo: baseRepoName, tag });
 
-      // Update the project's tag and imageName fields in the database
-      // Use type assertion for tag field (TypeScript cache issue)
+      // Update the project's tag field in the database
+      // The imageHash stays the same (tagging doesn't change the hash)
       await prisma.project.update({
         where: { id: mostRecentProject.id },
         data: {
           tag,
-          imageName: newImageName,
-        } as { tag: string; imageName: string },
+        },
       });
 
       tagged++;
@@ -932,7 +943,7 @@ export const removeTagFromCourseOfferingProjects = async (
   const projectsWithTag: Array<{
     id: number;
     teamId: number;
-    imageName: string;
+    imageHash: string;
   }> = [];
   for (const team of teams) {
     for (const project of team.projects) {
@@ -942,7 +953,7 @@ export const removeTagFromCourseOfferingProjects = async (
         projectsWithTag.push({
           id: project.id,
           teamId: team.id,
-          imageName: project.imageName,
+          imageHash: project.imageHash,
         });
       }
     }
@@ -958,18 +969,13 @@ export const removeTagFromCourseOfferingProjects = async (
 
   for (const project of projectsWithTag) {
     try {
-      // Extract the base image name (without tag)
-      const baseImageName = project.imageName.split(':')[0];
-      const newImageName = `${baseImageName}:latest`;
-
-      // Update the project's tag to null and imageName back to latest
-      // Use type assertion for tag field (TypeScript cache issue)
+      // Update the project's tag to null
+      // The imageHash stays the same
       await prisma.project.update({
         where: { id: project.id },
         data: {
           tag: null,
-          imageName: newImageName,
-        } as { tag: null; imageName: string },
+        },
       });
 
       untagged++;

@@ -150,25 +150,29 @@ export const getAllDockerContainers = async (_req: Request, res: Response) => {
 
 export const getAllDockerImages = async (_req: Request, res: Response) => {
   try {
-    // Get all project image names from database
+    // Get all project image hashes from database
     const projects = await prisma.project.findMany({
       select: {
-        imageName: true,
+        imageHash: true,
       },
     });
 
-    const projectImageNames = new Set(projects.map((p) => p.imageName));
+    const projectImageHashes = new Set(projects.map((p) => p.imageHash));
 
     // Get all images
     const images = await docker.listImages({ all: true });
     
     // Filter to only images associated with projects
-    // Match by repo tags (e.g., "repo:tag") or image ID
+    // Match by image ID/hash
     const projectImages = images.filter((image) => {
-      const repoTags = image.RepoTags || [];
+      const imageId = image.Id;
       
-      // Check if any repo tag matches a project image name
-      return repoTags.some((tag) => projectImageNames.has(tag));
+      // Check if image ID matches a project image hash
+      // Match by full ID or if hash starts with image ID (or vice versa)
+      return projectImageHashes.has(imageId) ||
+        Array.from(projectImageHashes).some((hash) => 
+          imageId.startsWith(hash) || hash.startsWith(imageId)
+        );
     });
     
     // Get detailed information for each image
@@ -449,12 +453,12 @@ export const removeImage = async (req: Request, res: Response) => {
   try {
     const { imageId } = req.params;
 
-    // Get image info to find its repo tags
-    let repoTags: string[] = [];
+    // Get image info to find its ID/hash
+    let imageHash: string | null = null;
     try {
       const image = docker.getImage(imageId);
       const imageInfo = await image.inspect();
-      repoTags = imageInfo.RepoTags || [];
+      imageHash = imageInfo.Id; // Full image ID (sha256:...)
     } catch {
       return res.status(404).json({
         error: 'Image not found',
@@ -463,24 +467,33 @@ export const removeImage = async (req: Request, res: Response) => {
       });
     }
 
-    // Verify image is associated with a project by checking if any repo tag matches a project's imageName
-    if (repoTags.length === 0) {
-      return res.status(404).json({
-        error: 'Image not found',
-        message: 'This image has no tags and is not associated with any project in the database',
-        imageId,
-      });
-    }
-
+    // Verify image is associated with a project by checking if the image hash matches
     const project = await prisma.project.findFirst({
       where: {
-        imageName: {
-          in: repoTags,
+        imageHash: {
+          equals: imageHash,
         },
       },
     });
 
-    if (!project) {
+    // Also check if any project's hash matches this image ID (handles partial matches)
+    let matchingProject = project;
+    if (!matchingProject) {
+      const allProjects = await prisma.project.findMany({
+        select: {
+          id: true,
+          imageHash: true,
+        },
+      });
+      
+      matchingProject = allProjects.find((p) => 
+        p.imageHash === imageHash ||
+        imageHash.startsWith(p.imageHash) ||
+        p.imageHash.startsWith(imageHash)
+      ) || null;
+    }
+
+    if (!matchingProject) {
       return res.status(404).json({
         error: 'Image not found',
         message: 'This image is not associated with any project in the database',
@@ -592,3 +605,4 @@ export const removeDataFile = async (req: Request, res: Response) => {
     });
   }
 };
+
