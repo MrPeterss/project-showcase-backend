@@ -1,5 +1,8 @@
 import type { Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 
+import { docker } from '../docker.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
 import * as adminService from './adminService.js';
 
@@ -36,6 +39,400 @@ export const triggerPruning = async (_req: Request, res: Response) => {
   } catch (error) {
     return res.status(500).json({
       error: 'Failed to prune projects',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const getAllDockerContainers = async (_req: Request, res: Response) => {
+  try {
+    // Get all containers (running and stopped)
+    const containers = await docker.listContainers({ all: true });
+    
+    // Get detailed information for each container
+    const containerDetails = await Promise.all(
+      containers.map(async (container) => {
+        try {
+          const containerInfo = await docker.getContainer(container.Id).inspect();
+          return {
+            id: container.Id,
+            shortId: container.Id.substring(0, 12),
+            names: container.Names,
+            image: container.Image,
+            imageId: container.ImageID,
+            command: container.Command,
+            created: container.Created,
+            status: container.Status,
+            ports: container.Ports,
+            labels: container.Labels,
+            mounts: container.Mounts,
+            networkSettings: containerInfo.NetworkSettings,
+            config: {
+              hostname: containerInfo.Config.Hostname,
+              env: containerInfo.Config.Env,
+              workingDir: containerInfo.Config.WorkingDir,
+            },
+            state: {
+              status: containerInfo.State.Status,
+              running: containerInfo.State.Running,
+              paused: containerInfo.State.Paused,
+              restarting: containerInfo.State.Restarting,
+              startedAt: containerInfo.State.StartedAt,
+              finishedAt: containerInfo.State.FinishedAt,
+            },
+          };
+        } catch (error) {
+          // If we can't inspect the container, return basic info
+          return {
+            id: container.Id,
+            shortId: container.Id.substring(0, 12),
+            names: container.Names,
+            image: container.Image,
+            imageId: container.ImageID,
+            command: container.Command,
+            created: container.Created,
+            state: container.State,
+            status: container.Status,
+            ports: container.Ports,
+            error: error instanceof Error ? error.message : 'Failed to inspect container',
+          };
+        }
+      }),
+    );
+    
+    return res.json({
+      total: containerDetails.length,
+      containers: containerDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to get Docker containers',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const getAllDockerImages = async (_req: Request, res: Response) => {
+  try {
+    // Get all images
+    const images = await docker.listImages({ all: true });
+    
+    // Get detailed information for each image
+    const imageDetails = await Promise.all(
+      images.map(async (image) => {
+        try {
+          const imageInfo = await docker.getImage(image.Id).inspect();
+          return {
+            id: image.Id,
+            shortId: image.Id.substring(7, 19), // Skip 'sha256:' prefix
+            repoTags: image.RepoTags || [],
+            repoDigests: image.RepoDigests || [],
+            created: image.Created,
+            size: image.Size,
+            virtualSize: image.VirtualSize,
+            parent: image.ParentId,
+            labels: imageInfo.Config?.Labels || {},
+            architecture: imageInfo.Architecture,
+            os: imageInfo.Os,
+            config: {
+              env: imageInfo.Config?.Env || [],
+              cmd: imageInfo.Config?.Cmd || [],
+              workingDir: imageInfo.Config?.WorkingDir,
+              exposedPorts: imageInfo.Config?.ExposedPorts || {},
+            },
+            rootFs: {
+              type: imageInfo.RootFS?.Type,
+              layers: imageInfo.RootFS?.Layers || [],
+            },
+          };
+        } catch (error) {
+          // If we can't inspect the image, return basic info
+          return {
+            id: image.Id,
+            shortId: image.Id.substring(7, 19),
+            repoTags: image.RepoTags || [],
+            repoDigests: image.RepoDigests || [],
+            created: image.Created,
+            size: image.Size,
+            virtualSize: image.VirtualSize,
+            parent: image.ParentId,
+            error: error instanceof Error ? error.message : 'Failed to inspect image',
+          };
+        }
+      }),
+    );
+    
+    return res.json({
+      total: imageDetails.length,
+      images: imageDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to get Docker images',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const getAllDataFiles = async (_req: Request, res: Response) => {
+  try {
+    // Determine the data files directory
+    // Use host directory if set, otherwise use container directory
+    const hostDataDir = process.env.DATA_FILES_HOST_DIR;
+    const containerDataDir =
+      process.env.DATA_FILES_DIR || '/app/data/project-data-files';
+    const dataDir = hostDataDir || containerDataDir;
+
+    // Check if directory exists
+    if (!fs.existsSync(dataDir)) {
+      return res.json({
+        total: 0,
+        directory: dataDir,
+        files: [],
+        message: 'Data files directory does not exist',
+      });
+    }
+
+    // Read all files in the directory
+    const files = fs.readdirSync(dataDir, { withFileTypes: true });
+
+    // Get detailed information for each file
+    const fileDetails = files
+      .filter((file) => file.isFile())
+      .map((file) => {
+        const filePath = path.join(dataDir, file.name);
+        try {
+          const stats = fs.statSync(filePath);
+          return {
+            name: file.name,
+            path: filePath,
+            size: stats.size,
+            sizeFormatted: formatBytes(stats.size),
+            created: stats.birthtime,
+            modified: stats.mtime,
+            accessed: stats.atime,
+            isFile: stats.isFile(),
+            isDirectory: stats.isDirectory(),
+          };
+        } catch (error) {
+          return {
+            name: file.name,
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Failed to get file stats',
+          };
+        }
+      });
+
+    // Sort by modified date (newest first)
+    fileDetails.sort((a, b) => {
+      const aModified = 'modified' in a ? a.modified : undefined;
+      const bModified = 'modified' in b ? b.modified : undefined;
+      if (aModified && bModified) {
+        return bModified.getTime() - aModified.getTime();
+      }
+      return 0;
+    });
+
+    // Calculate total size
+    const totalSize = fileDetails.reduce((sum, file) => {
+      return sum + ('size' in file && file.size !== undefined ? file.size : 0);
+    }, 0);
+
+    return res.json({
+      total: fileDetails.length,
+      directory: dataDir,
+      totalSize,
+      totalSizeFormatted: formatBytes(totalSize),
+      files: fileDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to get data files',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
+ * Helper function to format bytes to human-readable format
+ */
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 Bytes';
+
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+export const stopContainer = async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+
+    const container = docker.getContainer(containerId);
+
+    // Try to stop the container
+    try {
+      await container.stop();
+      return res.json({
+        message: 'Container stopped successfully',
+        containerId,
+      });
+    } catch (error) {
+      // Check if container is already stopped or doesn't exist
+      if ((error as { statusCode?: number }).statusCode === 304) {
+        return res.json({
+          message: 'Container is already stopped',
+          containerId,
+        });
+      }
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        return res.status(404).json({
+          error: 'Container not found',
+          containerId,
+        });
+      }
+      throw error;
+    }
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to stop container',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const removeContainer = async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+
+    const container = docker.getContainer(containerId);
+
+    // Try to stop the container first (if it's running)
+    try {
+      await container.stop();
+    } catch (error) {
+      // Ignore errors if container is already stopped or doesn't exist
+      if ((error as { statusCode?: number }).statusCode !== 304 && (error as { statusCode?: number }).statusCode !== 404) {
+        // Re-throw if it's a different error
+        throw error;
+      }
+    }
+
+    // Remove the container
+    try {
+      await container.remove();
+      return res.json({
+        message: 'Container removed successfully',
+        containerId,
+      });
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        return res.status(404).json({
+          error: 'Container not found',
+          containerId,
+        });
+      }
+      throw error;
+    }
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to remove container',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const removeImage = async (req: Request, res: Response) => {
+  try {
+    const { imageId } = req.params;
+
+    const image = docker.getImage(imageId);
+
+    try {
+      await image.remove();
+      return res.json({
+        message: 'Image removed successfully',
+        imageId,
+      });
+    } catch (error) {
+      if ((error as { statusCode?: number }).statusCode === 404) {
+        return res.status(404).json({
+          error: 'Image not found',
+          imageId,
+        });
+      }
+      if ((error as { statusCode?: number }).statusCode === 409) {
+        return res.status(409).json({
+          error: 'Image is in use and cannot be removed',
+          imageId,
+          message: 'The image is being used by one or more containers. Remove the containers first.',
+        });
+      }
+      throw error;
+    }
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to remove image',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const removeDataFile = async (req: Request, res: Response) => {
+  try {
+    const { fileName } = req.params;
+
+    // Determine the data files directory
+    const hostDataDir = process.env.DATA_FILES_HOST_DIR;
+    const containerDataDir =
+      process.env.DATA_FILES_DIR || '/app/data/project-data-files';
+    const dataDir = hostDataDir || containerDataDir;
+
+    // Construct the full file path
+    const filePath = path.join(dataDir, fileName);
+
+    // Security check: ensure the file path is within the data directory
+    const resolvedPath = path.resolve(filePath);
+    const resolvedDataDir = path.resolve(dataDir);
+    if (!resolvedPath.startsWith(resolvedDataDir)) {
+      return res.status(400).json({
+        error: 'Invalid file path',
+        message: 'File path must be within the data files directory',
+      });
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        error: 'File not found',
+        fileName,
+        path: filePath,
+      });
+    }
+
+    // Check if it's actually a file (not a directory)
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({
+        error: 'Path is not a file',
+        fileName,
+        message: 'The specified path is a directory, not a file',
+      });
+    }
+
+    // Remove the file
+    fs.unlinkSync(filePath);
+
+    return res.json({
+      message: 'Data file removed successfully',
+      fileName,
+      path: filePath,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to remove data file',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
