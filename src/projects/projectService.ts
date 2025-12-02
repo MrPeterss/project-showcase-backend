@@ -204,8 +204,8 @@ export const deploy = async (
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
-    // Build the image
-    const imageName = `${repoName}:latest`.toLowerCase();
+    // Build the image (use team name for image name)
+    const imageName = `${normalizeContainerName(team.name)}:latest`;
     const buildOptions: Record<string, unknown> = {
       t: imageName,
     };
@@ -602,7 +602,8 @@ export const buildWithStreaming = async (
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
-  const imageName = `${repoName.toLowerCase()}:latest`;
+  // Use team name for image name
+  const imageName = `${normalizeContainerName(team.name)}:latest`;
 
   // Create initial project record
   const project = await prisma.project.create({

@@ -149,8 +149,8 @@ export const buildOldJson = async (
     // Ensure the projects network exists
     await ensureProjectsNetwork();
 
-    // Build the backend image
-    const imageName = `${repoName}-old-json:latest`.toLowerCase();
+    // Build the backend image (use team name for image name)
+    const imageName = `${normalizeContainerName(team.name)}-old-json:latest`;
     const buildStream = await docker.buildImage(
       {
         context: backendDir,
@@ -372,8 +372,8 @@ export const buildOldSql = async (
     // Ensure the projects network exists
     await ensureProjectsNetwork();
 
-    // Build the backend image
-    const imageName = `${repoName}-old-sql:latest`.toLowerCase();
+    // Build the backend image (use team name for image name)
+    const imageName = `${normalizeContainerName(team.name)}-old-sql:latest`;
     const buildStream = await docker.buildImage(
       {
         context: backendDir,
