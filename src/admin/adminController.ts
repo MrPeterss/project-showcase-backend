@@ -7,6 +7,13 @@ import { prisma } from '../prisma.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
 import * as adminService from './adminService.js';
 
+/**
+ * Normalize container name: lowercase and replace spaces with dashes
+ */
+const normalizeContainerName = (name: string): string => {
+  return name.toLowerCase().replace(/\s+/g, '-');
+};
+
 export const promoteUser = async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId);
   
@@ -319,6 +326,7 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
         githubUrl: string;
         status: string;
         containerId: string;
+        imageName: string;
       }>;
     }>();
 
@@ -348,11 +356,18 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
             containers: [],
           });
         }
+        // Reconstruct image name from team name and tag
+        const tag = (project as { tag?: string | null }).tag;
+        const imageName = tag
+          ? `${normalizeContainerName(project.team.name)}:${tag}`
+          : `${normalizeContainerName(project.team.name)}:latest`;
+
         teamsMap.get(teamId)!.containers.push({
           projectId: project.id,
           githubUrl: project.githubUrl,
           status: project.status,
           containerId: project.containerId,
+          imageName,
         });
       }
     }
