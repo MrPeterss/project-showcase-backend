@@ -381,32 +381,9 @@ export const pruneUntaggedProjects = async (): Promise<{
 
     console.log(`Found ${projectsToPrune.length} untagged projects to prune`);
 
-    // Also get projects that are already marked as pruned but might still have resources
-    const prunedProjects = await prisma.project.findMany({
-      where: {
-        status: 'pruned',
-        OR: [
-          { containerId: { not: null } },
-          { dataFile: { not: null } },
-        ],
-      },
-    });
-
-    const prunedProjectsWithResources = prunedProjects.map((project) => ({
-      id: project.id,
-      containerId: project.containerId,
-      imageHash: (project as unknown as { imageHash: string }).imageHash,
-      dataFile: project.dataFile,
-    }));
-
-    const allProjectsToPrune = [...projectsToPrune, ...prunedProjectsWithResources];
-    console.log(
-      `Total projects to prune: ${allProjectsToPrune.length} (${projectsToPrune.length} untagged, ${prunedProjectsWithResources.length} already pruned with remaining resources)`,
-    );
-
     // Prune each project, passing the image hash map for efficient lookups
     const results = await Promise.allSettled(
-      allProjectsToPrune.map((project) => pruneProject(project, imageHashToProjectIds)),
+      projectsToPrune.map((project) => pruneProject(project, imageHashToProjectIds)),
     );
 
     let successCount = 0;
@@ -414,7 +391,7 @@ export const pruneUntaggedProjects = async (): Promise<{
     const errors: Array<{ projectId: number; errors: string[] }> = [];
 
     results.forEach((result, index) => {
-      const projectId = allProjectsToPrune[index].id;
+      const projectId = projectsToPrune[index].id;
       if (result.status === 'fulfilled') {
         const projectErrors = result.value;
         if (projectErrors.length === 0) {
@@ -445,7 +422,7 @@ export const pruneUntaggedProjects = async (): Promise<{
     });
 
     const summary = {
-      totalFound: allProjectsToPrune.length,
+      totalFound: projectsToPrune.length,
       successCount,
       errorCount,
       errors,

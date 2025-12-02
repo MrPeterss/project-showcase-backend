@@ -18,3 +18,9 @@ export const fileNameParamsSchema = z.object({
   }),
 });
 
+export const projectIdParamsSchema = z.object({
+  params: z.object({
+    projectId: z.string().regex(/^\d+$/, 'Project ID must be a number'),
+  }),
+});
+
