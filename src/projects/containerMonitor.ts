@@ -216,6 +216,7 @@ export const pruneUntaggedProjects = async (): Promise<{
       projectsToPrune.map(async (project) => {
         const errors: string[] = [];
         const imageHash = (project as unknown as { imageHash: string }).imageHash;
+        let containerRemoved = !project.containerId; // true if no container to remove
 
         // Remove container if it exists
         if (project.containerId) {
@@ -228,20 +229,32 @@ export const pruneUntaggedProjects = async (): Promise<{
             }
             try {
               await container.remove();
+              containerRemoved = true;
             } catch (error) {
               if ((error as { statusCode?: number }).statusCode !== 404) {
                 errors.push(`Failed to remove container: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                containerRemoved = false;
+              } else {
+                // 404 means container doesn't exist, which is fine
+                containerRemoved = true;
               }
             }
           } catch (error) {
             if ((error as { statusCode?: number }).statusCode !== 404) {
               errors.push(`Container error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              containerRemoved = false;
+            } else {
+              // 404 means container doesn't exist, which is fine
+              containerRemoved = true;
             }
           }
         }
 
+        // Check if image is protected
+        const imageProtected = imageHash && protectedImages.has(imageHash);
+
         // Remove image if it's not protected
-        if (imageHash && !protectedImages.has(imageHash)) {
+        if (imageHash && !imageProtected) {
           try {
             const image = docker.getImage(imageHash);
             await image.remove();
@@ -306,19 +319,24 @@ export const pruneUntaggedProjects = async (): Promise<{
           }
         }
 
-        // Mark project as pruned
-        try {
-          await prisma.project.update({
-            where: { id: project.id },
-            data: {
-              status: 'pruned',
-              containerId: null,
-              containerName: null,
-              dataFile: null,
-            } as { status: string; containerId: null; containerName: null; dataFile: null },
-          });
-        } catch (error) {
-          errors.push(`Failed to update project status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        // Mark project as pruned if container was removed (or didn't exist)
+        // If image is protected, that's fine - we can still mark as pruned
+        if (containerRemoved) {
+          try {
+            await prisma.project.update({
+              where: { id: project.id },
+              data: {
+                status: 'pruned',
+                containerId: null,
+                containerName: null,
+                dataFile: null,
+              } as { status: string; containerId: null; containerName: null; dataFile: null },
+            });
+          } catch (error) {
+            errors.push(`Failed to update project status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        } else {
+          errors.push('Project not marked as pruned because container could not be removed');
         }
 
         return errors;
