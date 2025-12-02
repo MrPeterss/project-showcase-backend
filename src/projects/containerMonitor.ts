@@ -134,193 +134,10 @@ const getHostDataFilePath = (filePath: string): string => {
 };
 
 /**
- * Prune a single project: remove container, image, and data file
- * Only marks as pruned if all resources are successfully removed
- * @param project - The project to prune
- * @param imageHashToProjectIds - Map of imageHash to set of project IDs that use it (for checking if image is shared)
- */
-const pruneProject = async (
-  project: {
-    id: number;
-    containerId: string | null;
-    imageHash: string;
-    dataFile: string | null;
-  },
-  imageHashToProjectIds: Map<string, Set<number>>,
-) => {
-  const errors: string[] = [];
-  let containerRemoved = !project.containerId; // true if no container to remove
-  let imageRemoved = false;
-  let dataFileRemoved = !project.dataFile; // true if no data file to remove
-
-  // Remove container if it exists
-  if (project.containerId) {
-    try {
-      const container = docker.getContainer(project.containerId);
-      try {
-        await container.stop();
-      } catch {
-        // Container might already be stopped, continue
-      }
-      try {
-        await container.remove();
-        containerRemoved = true;
-      } catch (error) {
-        if ((error as { statusCode?: number }).statusCode !== 404) {
-          errors.push(`Failed to remove container: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          containerRemoved = false;
-        } else {
-          // 404 means container doesn't exist, which is fine
-          containerRemoved = true;
-        }
-      }
-    } catch (error) {
-      if ((error as { statusCode?: number }).statusCode !== 404) {
-        errors.push(`Container error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        containerRemoved = false;
-      } else {
-        // 404 means container doesn't exist, which is fine
-        containerRemoved = true;
-      }
-    }
-  }
-
-  // Check if other projects (especially tagged ones) still reference this image
-  // Use the pre-built map for O(1) lookup instead of database query
-  const projectsUsingImage = imageHashToProjectIds.get(project.imageHash);
-  const otherProjectsUsingImage = projectsUsingImage 
-    ? projectsUsingImage.size > 1 || !projectsUsingImage.has(project.id)
-    : false;
-
-  if (otherProjectsUsingImage) {
-    // Other projects still reference this image, so we shouldn't remove it
-    // Mark as successfully "removed" from this project's perspective
-    // (it's not this project's responsibility to clean it up)
-    imageRemoved = true;
-    console.log(
-      `Skipping image removal for project ${project.id}: other projects still reference image ${project.imageHash.substring(0, 12)}`,
-    );
-  } else {
-    // No other projects reference this image, safe to remove
-    // Remove Docker image by hash
-    // If image removal fails due to conflict (409), find and remove containers using it
-    try {
-      const image = docker.getImage(project.imageHash);
-      await image.remove();
-      imageRemoved = true;
-    } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      if (statusCode === 409) {
-        // Image is in use by a container - find and remove all containers using this image
-        try {
-          const allContainers = await docker.listContainers({ all: true });
-
-          // Find containers using this image (match by ImageID)
-          const containersUsingImage = allContainers.filter((container) => {
-            return (
-              container.ImageID?.startsWith(project.imageHash) ||
-              project.imageHash.startsWith(container.ImageID || '')
-            );
-          });
-
-          for (const containerInfo of containersUsingImage) {
-            try {
-              const container = docker.getContainer(containerInfo.Id);
-              try {
-                await container.stop();
-              } catch {
-                // Container might already be stopped
-              }
-              try {
-                await container.remove();
-              } catch (containerError) {
-                errors.push(
-                  `Failed to remove container ${containerInfo.Id.substring(0, 12)} using image: ${containerError instanceof Error ? containerError.message : 'Unknown error'}`,
-                );
-              }
-            } catch (containerError) {
-              errors.push(
-                `Failed to access container ${containerInfo.Id.substring(0, 12)}: ${containerError instanceof Error ? containerError.message : 'Unknown error'}`,
-              );
-            }
-          }
-
-          // Retry removing the image after removing containers
-          try {
-            const image = docker.getImage(project.imageHash);
-            await image.remove();
-            imageRemoved = true;
-          } catch (retryError) {
-            if ((retryError as { statusCode?: number }).statusCode !== 404) {
-              errors.push(
-                `Failed to remove image after removing containers: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`,
-              );
-              imageRemoved = false;
-            } else {
-              // 404 means image doesn't exist, which is fine
-              imageRemoved = true;
-            }
-          }
-        } catch (findError) {
-          errors.push(
-            `Failed to find containers using image: ${findError instanceof Error ? findError.message : 'Unknown error'}`,
-          );
-          imageRemoved = false;
-        }
-      } else if (statusCode !== 404) {
-        errors.push(`Failed to remove image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        imageRemoved = false;
-      } else {
-        // 404 means image doesn't exist, which is fine
-        imageRemoved = true;
-      }
-    }
-  }
-
-  // Remove data file if it exists
-  if (project.dataFile) {
-    try {
-      const hostFilePath = getHostDataFilePath(project.dataFile);
-      if (fs.existsSync(hostFilePath)) {
-        fs.unlinkSync(hostFilePath);
-        dataFileRemoved = true;
-      } else {
-        // File doesn't exist, which is fine
-        dataFileRemoved = true;
-      }
-    } catch (error) {
-      errors.push(`Failed to remove data file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      dataFileRemoved = false;
-    }
-  }
-
-  // Only mark as pruned if all resources were successfully removed
-  if (containerRemoved && imageRemoved && dataFileRemoved) {
-    try {
-      await prisma.project.update({
-        where: { id: project.id },
-        data: {
-          status: 'pruned',
-          containerId: null,
-          containerName: null,
-          dataFile: null,
-        } as { status: string; containerId: null; containerName: null; dataFile: null },
-      });
-    } catch (error) {
-      errors.push(`Failed to update project status: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  } else {
-    errors.push('Project not marked as pruned because some resources could not be removed');
-  }
-
-  return errors;
-};
-
-/**
  * Prune all untagged, non-running projects
- * Finds projects that are not running and have no tag, then removes their containers, images, and data files
- * Only prunes resources that are associated with projects in the database
- * Returns statistics about the pruning operation
+ * Two-step process:
+ * 1. Build a set of protected images from running containers and tagged projects
+ * 2. Prune non-running, non-pruned, untagged projects and remove their resources
  */
 export const pruneUntaggedProjects = async (): Promise<{
   totalFound: number;
@@ -329,61 +146,183 @@ export const pruneUntaggedProjects = async (): Promise<{
   errors: Array<{ projectId: number; errors: string[] }>;
 }> => {
   try {
-    // Build a map of imageHash -> Set of project IDs that use it
-    // This allows O(1) lookup to check if an image is shared by other projects
-    // Single query upfront instead of N queries during pruning
-    const allNonPrunedProjects = await prisma.project.findMany({
+    // Step 1: Build a set of protected images
+    const protectedImages = new Set<string>();
+
+    // Get all running containers and add their image hashes to protected set
+    const runningProjects = await prisma.project.findMany({
       where: {
-        status: {
-          not: 'pruned',
-        },
+        status: 'running',
+      },
+      select: {
+        id: true,
+        containerId: true,
+        imageHash: true,
       },
     });
 
-    const imageHashToProjectIds = new Map<string, Set<number>>();
-    for (const project of allNonPrunedProjects) {
+    for (const project of runningProjects) {
       const imageHash = (project as unknown as { imageHash: string }).imageHash;
       if (imageHash) {
-        if (!imageHashToProjectIds.has(imageHash)) {
-          imageHashToProjectIds.set(imageHash, new Set());
-        }
-        imageHashToProjectIds.get(imageHash)!.add(project.id);
+        protectedImages.add(imageHash);
       }
     }
 
-    // Get all projects that are not running and not already pruned
-    const allNonRunningProjects = await prisma.project.findMany({
+    // Get all tagged projects and add their image hashes to protected set
+    const taggedProjects = await prisma.project.findMany({
       where: {
         AND: [
-          {
-            status: {
-              not: 'running',
-            },
-          },
-          {
-            status: {
-              not: 'pruned',
-            },
-          },
+          { tag: { not: null } },
+          { status: { not: 'pruned' } },
         ],
+      },
+      select: {
+        id: true,
+        imageHash: true,
       },
     });
 
-    // Filter for projects with no tag (tag is null) and select only needed fields
-    const projectsToPrune = allNonRunningProjects
-      .filter((project) => (project as { tag?: string | null }).tag === null)
-      .map((project) => ({
-        id: project.id,
-        containerId: project.containerId,
-        imageHash: (project as unknown as { imageHash: string }).imageHash,
-        dataFile: project.dataFile,
-      }));
+    for (const project of taggedProjects) {
+      const imageHash = (project as unknown as { imageHash: string }).imageHash;
+      if (imageHash) {
+        protectedImages.add(imageHash);
+      }
+    }
 
-    console.log(`Found ${projectsToPrune.length} untagged projects to prune`);
+    console.log(`Found ${protectedImages.size} protected images`);
 
-    // Prune each project, passing the image hash map for efficient lookups
+    // Step 2: Get projects that need to be pruned
+    // Non-running, non-pruned, untagged projects
+    const projectsToPrune = await prisma.project.findMany({
+      where: {
+        AND: [
+          { status: { not: 'running' } },
+          { status: { not: 'pruned' } },
+          { tag: null },
+        ],
+      },
+      select: {
+        id: true,
+        containerId: true,
+        imageHash: true,
+        dataFile: true,
+      },
+    });
+
+    console.log(`Found ${projectsToPrune.length} projects to prune`);
+
+    // Prune each project
     const results = await Promise.allSettled(
-      projectsToPrune.map((project) => pruneProject(project, imageHashToProjectIds)),
+      projectsToPrune.map(async (project) => {
+        const errors: string[] = [];
+        const imageHash = (project as unknown as { imageHash: string }).imageHash;
+
+        // Remove container if it exists
+        if (project.containerId) {
+          try {
+            const container = docker.getContainer(project.containerId);
+            try {
+              await container.stop();
+            } catch {
+              // Container might already be stopped, continue
+            }
+            try {
+              await container.remove();
+            } catch (error) {
+              if ((error as { statusCode?: number }).statusCode !== 404) {
+                errors.push(`Failed to remove container: ${error instanceof Error ? error.message : 'Unknown error'}`);
+              }
+            }
+          } catch (error) {
+            if ((error as { statusCode?: number }).statusCode !== 404) {
+              errors.push(`Container error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        }
+
+        // Remove image if it's not protected
+        if (imageHash && !protectedImages.has(imageHash)) {
+          try {
+            const image = docker.getImage(imageHash);
+            await image.remove();
+          } catch (error) {
+            const statusCode = (error as { statusCode?: number }).statusCode;
+            if (statusCode === 409) {
+              // Image is in use - try to find and remove containers using it
+              try {
+                const allContainers = await docker.listContainers({ all: true });
+                const containersUsingImage = allContainers.filter((container) => {
+                  return (
+                    container.ImageID?.startsWith(imageHash) ||
+                    imageHash.startsWith(container.ImageID || '')
+                  );
+                });
+
+                for (const containerInfo of containersUsingImage) {
+                  try {
+                    const container = docker.getContainer(containerInfo.Id);
+                    try {
+                      await container.stop();
+                    } catch {
+                      // Already stopped
+                    }
+                    try {
+                      await container.remove();
+                    } catch {
+                      // Ignore removal errors
+                    }
+                  } catch {
+                    // Ignore container access errors
+                  }
+                }
+
+                // Retry image removal
+                try {
+                  const image = docker.getImage(imageHash);
+                  await image.remove();
+                } catch (retryError) {
+                  if ((retryError as { statusCode?: number }).statusCode !== 404) {
+                    errors.push(`Failed to remove image after removing containers: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+                  }
+                }
+              } catch (findError) {
+                errors.push(`Failed to find containers using image: ${findError instanceof Error ? findError.message : 'Unknown error'}`);
+              }
+            } else if (statusCode !== 404) {
+              errors.push(`Failed to remove image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          }
+        }
+
+        // Remove data file if it exists
+        if (project.dataFile) {
+          try {
+            const hostFilePath = getHostDataFilePath(project.dataFile);
+            if (fs.existsSync(hostFilePath)) {
+              fs.unlinkSync(hostFilePath);
+            }
+          } catch (error) {
+            errors.push(`Failed to remove data file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
+
+        // Mark project as pruned
+        try {
+          await prisma.project.update({
+            where: { id: project.id },
+            data: {
+              status: 'pruned',
+              containerId: null,
+              containerName: null,
+              dataFile: null,
+            } as { status: string; containerId: null; containerName: null; dataFile: null },
+          });
+        } catch (error) {
+          errors.push(`Failed to update project status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+
+        return errors;
+      }),
     );
 
     let successCount = 0;
