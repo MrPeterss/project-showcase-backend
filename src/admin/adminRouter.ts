@@ -1,13 +1,18 @@
 import { Router } from 'express';
 
 import { validateRequest } from '../middleware/validateRequest.js';
-import { projectIdParamsSchema } from './admin.schema.js';
+import {
+  projectIdParamsSchema,
+  updateUserNameSchema,
+  userIdParamsSchema,
+} from './admin.schema.js';
 import {
   demoteUser,
   getAllProjects,
   pruneProject,
   promoteUser,
   triggerPruning,
+  updateUserName,
 } from './adminController.js';
 
 const router = Router();
@@ -38,5 +43,11 @@ router.post(
 // User admin management routes
 router.post('/users/:userId/promote', promoteUser);
 router.post('/users/:userId/demote', demoteUser);
+router.put(
+  '/users/:userId/name',
+  validateRequest(userIdParamsSchema),
+  validateRequest(updateUserNameSchema),
+  updateUserName,
+);
 
 export default router;

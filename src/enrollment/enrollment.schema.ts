@@ -9,6 +9,7 @@ export const createEnrollmentsSchema = z.object({
         z.object({
           email: z.string().email(),
           role: z.enum(COURSE_OFFERING_ROLE_VALUES),
+          name: z.string().optional(),
         }),
       )
       .min(1),

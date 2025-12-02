@@ -48,3 +48,27 @@ export const demoteUserFromAdmin = async (userId: number) => {
 
   return updatedUser;
 };
+
+export const updateUserName = async (userId: number, name: string | null) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { name },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      isAdmin: true,
+      createdAt: true,
+    },
+  });
+
+  return updatedUser;
+};

@@ -24,3 +24,15 @@ export const projectIdParamsSchema = z.object({
   }),
 });
 
+export const userIdParamsSchema = z.object({
+  params: z.object({
+    userId: z.string().regex(/^\d+$/, 'User ID must be a number'),
+  }),
+});
+
+export const updateUserNameSchema = z.object({
+  body: z.object({
+    name: z.string().min(1, 'Name cannot be empty').nullable().optional(),
+  }),
+});
+

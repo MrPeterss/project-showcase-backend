@@ -37,6 +37,18 @@ export const demoteUser = async (req: Request, res: Response) => {
   });
 };
 
+export const updateUserName = async (req: Request, res: Response) => {
+  const userId = parseInt(req.params.userId);
+  const { name } = req.body;
+  
+  const updatedUser = await adminService.updateUserName(userId, name ?? null);
+  
+  return res.json({
+    message: 'User name updated successfully',
+    user: updatedUser,
+  });
+};
+
 export const triggerPruning = async (_req: Request, res: Response) => {
   try {
     const result = await pruneUntaggedProjects();

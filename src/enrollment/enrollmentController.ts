@@ -114,7 +114,7 @@ export const createCourseOfferingEnrollments = async (
   const createdEnrollments = [];
 
   for (const enrollment of enrollments) {
-    const { email, role } = enrollment;
+    const { email, role, name } = enrollment;
 
     // Find or create user
     let user = await prisma.user.findUnique({
@@ -122,8 +122,13 @@ export const createCourseOfferingEnrollments = async (
     });
 
     if (!user) {
+      // Only set name when creating a new user
+      const userData: { email: string; name?: string } = { email };
+      if (name) {
+        userData.name = name;
+      }
       user = await prisma.user.create({
-        data: { email },
+        data: userData,
       });
     }
 
@@ -148,7 +153,7 @@ export const createCourseOfferingEnrollments = async (
       },
       include: {
         user: {
-          select: { id: true, email: true, createdAt: true },
+          select: { id: true, email: true, name: true, createdAt: true },
         },
       },
     });
