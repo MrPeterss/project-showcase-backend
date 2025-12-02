@@ -478,7 +478,20 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
 
   try {
     const container = docker.getContainer(project.containerId);
-    await container.stop();
+    
+    // Force kill the container (immediate termination)
+    try {
+      await container.kill();
+    } catch (error) {
+      // If kill fails, check if container is already stopped/doesn't exist
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      if (statusCode === 404 || statusCode === 304) {
+        // 404 = doesn't exist, 304 = already stopped - both are fine, continue
+      } else {
+        // Other error from kill, but we'll still try to update status
+        console.warn(`Failed to kill container ${project.containerId}:`, error);
+      }
+    }
 
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
@@ -493,8 +506,10 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
 
     return updatedProject;
   } catch (error) {
-    // If container doesn't exist, just update the status
-    if ((error as { statusCode?: number }).statusCode === 404) {
+    // If container doesn't exist or is already stopped, just update the status
+    const statusCode = (error as { statusCode?: number }).statusCode;
+    if (statusCode === 404 || statusCode === 304) {
+      // 404 = doesn't exist, 304 = already stopped
       const updatedProject = await prisma.project.update({
         where: { id: projectId },
         data: {
