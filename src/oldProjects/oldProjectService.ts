@@ -55,7 +55,7 @@ const ensureProjectsNetwork = async (): Promise<void> => {
 export const buildOldJson = async (
   teamId: number,
   githubUrl: string,
-  _deployedById: number,
+  deployedById: number,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -66,11 +66,57 @@ export const buildOldJson = async (
     throw new NotFoundError('Team not found');
   }
 
+  // Create project record
+  const project = await prisma.project.create({
+    data: {
+      teamId,
+      githubUrl,
+      imageHash: '', // Will be set after build
+      status: 'building',
+      deployedById,
+      buildArgs: {},
+    },
+  });
+
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `old-project-${Date.now()}-${repoName}`);
   const backendDir = path.join(tempDir, 'backend');
 
   try {
+    // Find and stop any running projects for this team
+    const runningProjects = await prisma.project.findMany({
+      where: {
+        teamId,
+        status: 'running',
+        id: { not: project.id },
+      },
+      select: {
+        id: true,
+        containerId: true,
+      },
+    });
+
+    // Stop all running containers for this team
+    for (const runningProject of runningProjects) {
+      if (runningProject.containerId) {
+        try {
+          const container = docker.getContainer(runningProject.containerId);
+          await container.stop();
+          
+          // Update project status to stopped
+          await prisma.project.update({
+            where: { id: runningProject.id },
+            data: {
+              status: 'stopped',
+              stoppedAt: new Date(),
+            },
+          });
+        } catch {
+          // Continue even if stop fails (container might not exist)
+        }
+      }
+    }
+
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
@@ -121,6 +167,19 @@ export const buildOldJson = async (
       });
     });
 
+    // Get the image hash after build
+    const builtImage = docker.getImage(imageName);
+    const imageInfo = await builtImage.inspect();
+    const imageHash = imageInfo.Id; // Full image ID (sha256:...)
+
+    // Update project with image hash
+    await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        imageHash,
+      },
+    });
+
     // Create and start database container
     const dbContainer = await docker.createContainer({
       Image: 'mysql:latest',
@@ -148,7 +207,7 @@ export const buildOldJson = async (
 
     // Create and start backend container
     const backendContainer = await docker.createContainer({
-      Image: imageName,
+      Image: imageHash, // Use image hash instead of image name
       name: containerName,
       Env: [
         `DB_NAME=${dbContainerName}`,
@@ -169,13 +228,41 @@ export const buildOldJson = async (
 
     await backendContainer.start();
 
+    // Get container info
+    const containerInfo = await backendContainer.inspect();
+
+    // Update project with container information
+    const updatedProject = await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        containerId: backendContainer.id,
+        containerName: containerInfo.Name,
+        status: 'running',
+        ports: containerInfo.NetworkSettings.Ports,
+        deployedAt: new Date(),
+      },
+      include: {
+        team: true,
+      },
+    });
+
     return {
       success: true,
+      project: updatedProject,
       backendContainer: containerName,
       dbContainer: dbContainerName,
       imageName,
+      imageHash,
+      containerId: backendContainer.id,
+      containerName: containerInfo.Name,
+      ports: containerInfo.NetworkSettings.Ports,
     };
   } catch (error) {
+    // Update project status to failed
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { status: 'failed' },
+    });
     throw error;
   } finally {
     // Clean up the temporary directory
@@ -191,7 +278,7 @@ export const buildOldJson = async (
 export const buildOldSql = async (
   teamId: number,
   githubUrl: string,
-  _deployedById: number,
+  deployedById: number,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -202,11 +289,57 @@ export const buildOldSql = async (
     throw new NotFoundError('Team not found');
   }
 
+  // Create project record
+  const project = await prisma.project.create({
+    data: {
+      teamId,
+      githubUrl,
+      imageHash: '', // Will be set after build
+      status: 'building',
+      deployedById,
+      buildArgs: {},
+    },
+  });
+
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `old-project-${Date.now()}-${repoName}`);
   const backendDir = path.join(tempDir, 'backend');
 
   try {
+    // Find and stop any running projects for this team
+    const runningProjects = await prisma.project.findMany({
+      where: {
+        teamId,
+        status: 'running',
+        id: { not: project.id },
+      },
+      select: {
+        id: true,
+        containerId: true,
+      },
+    });
+
+    // Stop all running containers for this team
+    for (const runningProject of runningProjects) {
+      if (runningProject.containerId) {
+        try {
+          const container = docker.getContainer(runningProject.containerId);
+          await container.stop();
+          
+          // Update project status to stopped
+          await prisma.project.update({
+            where: { id: runningProject.id },
+            data: {
+              status: 'stopped',
+              stoppedAt: new Date(),
+            },
+          });
+        } catch {
+          // Continue even if stop fails (container might not exist)
+        }
+      }
+    }
+
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
@@ -257,6 +390,19 @@ export const buildOldSql = async (
       });
     });
 
+    // Get the image hash after build
+    const builtImage = docker.getImage(imageName);
+    const imageInfo = await builtImage.inspect();
+    const imageHash = imageInfo.Id; // Full image ID (sha256:...)
+
+    // Update project with image hash
+    await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        imageHash,
+      },
+    });
+
     // Create and start database container
     const dbContainer = await docker.createContainer({
       Image: 'mysql:latest',
@@ -284,7 +430,7 @@ export const buildOldSql = async (
 
     // Create and start backend container
     const backendContainer = await docker.createContainer({
-      Image: imageName,
+      Image: imageHash, // Use image hash instead of image name
       name: containerName,
       Env: [
         `DB_NAME=${dbContainerName}`,
@@ -305,13 +451,41 @@ export const buildOldSql = async (
 
     await backendContainer.start();
 
+    // Get container info
+    const containerInfo = await backendContainer.inspect();
+
+    // Update project with container information
+    const updatedProject = await prisma.project.update({
+      where: { id: project.id },
+      data: {
+        containerId: backendContainer.id,
+        containerName: containerInfo.Name,
+        status: 'running',
+        ports: containerInfo.NetworkSettings.Ports,
+        deployedAt: new Date(),
+      },
+      include: {
+        team: true,
+      },
+    });
+
     return {
       success: true,
+      project: updatedProject,
       backendContainer: containerName,
       dbContainer: dbContainerName,
       imageName,
+      imageHash,
+      containerId: backendContainer.id,
+      containerName: containerInfo.Name,
+      ports: containerInfo.NetworkSettings.Ports,
     };
   } catch (error) {
+    // Update project status to failed
+    await prisma.project.update({
+      where: { id: project.id },
+      data: { status: 'failed' },
+    });
     throw error;
   } finally {
     // Clean up the temporary directory
