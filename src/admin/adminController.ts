@@ -294,55 +294,6 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
       },
     });
 
-    // Get Docker container info
-    const allContainers = await docker.listContainers({ all: true });
-    const containerMap = new Map<string, any>();
-    
-    for (const project of projects) {
-      if (project.containerId) {
-        const matchingContainer = allContainers.find(
-          (c) =>
-            c.Id === project.containerId ||
-            (c.Names || []).some((name) => {
-              const normalizedName = name.startsWith('/') ? name : `/${name}`;
-              const projectName = project.containerName?.startsWith('/')
-                ? project.containerName
-                : `/${project.containerName}`;
-              return normalizedName === projectName;
-            }),
-        );
-
-        if (matchingContainer && !containerMap.has(project.containerId)) {
-          try {
-            const containerInfo = await docker.getContainer(matchingContainer.Id).inspect();
-            containerMap.set(project.containerId, {
-              id: matchingContainer.Id,
-              shortId: matchingContainer.Id.substring(0, 12),
-              names: matchingContainer.Names,
-              status: matchingContainer.Status,
-              state: {
-                status: containerInfo.State.Status,
-                running: containerInfo.State.Running,
-                paused: containerInfo.State.Paused,
-                restarting: containerInfo.State.Restarting,
-                startedAt: containerInfo.State.StartedAt,
-                finishedAt: containerInfo.State.FinishedAt,
-              },
-              ports: matchingContainer.Ports,
-            });
-          } catch {
-            containerMap.set(project.containerId, {
-              id: matchingContainer.Id,
-              shortId: matchingContainer.Id.substring(0, 12),
-              names: matchingContainer.Names,
-              status: matchingContainer.Status,
-              error: 'Failed to inspect container',
-            });
-          }
-        }
-      }
-    }
-
     // Organize by team
     const teamsMap = new Map<number, {
       team: {
@@ -368,7 +319,6 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
         githubUrl: string;
         status: string;
         containerId: string;
-        container: any;
       }>;
     }>();
 
@@ -403,7 +353,6 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
           githubUrl: project.githubUrl,
           status: project.status,
           containerId: project.containerId,
-          container: containerMap.get(project.containerId) || null,
         });
       }
     }
