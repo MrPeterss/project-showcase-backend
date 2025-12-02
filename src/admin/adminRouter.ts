@@ -1,10 +1,11 @@
 import { Router } from 'express';
 
+import { validateRequest } from '../middleware/validateRequest.js';
+import { projectIdParamsSchema } from './admin.schema.js';
 import {
   demoteUser,
-  getContainersByTeam,
-  getDataFilesByTeam,
-  getImagesWithProjects,
+  getAllProjects,
+  pruneProject,
   promoteUser,
   triggerPruning,
 } from './adminController.js';
@@ -23,13 +24,16 @@ router.get('/audit-logs', (_req, res) => {
   res.json({ message: 'Admin audit logs endpoint' });
 });
 
-// Resource management routes (organized by resource type)
-router.get('/resources/images', getImagesWithProjects);
-router.get('/resources/containers', getContainersByTeam);
-router.get('/resources/data-files', getDataFilesByTeam);
+// Resource management route - get all non-pruned projects
+router.get('/resources/projects', getAllProjects);
 
 // Project management routes
 router.post('/projects/prune', triggerPruning);
+router.post(
+  '/projects/:projectId/prune',
+  validateRequest(projectIdParamsSchema),
+  pruneProject,
+);
 
 // User admin management routes
 router.post('/users/:userId/promote', promoteUser);
