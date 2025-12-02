@@ -61,7 +61,8 @@ export const getProject = async (req: Request, res: Response) => {
 
 export const stopProjectController = async (req: Request, res: Response) => {
   const { projectId } = req.params;
-  const project = await stopProject(Number(projectId));
+  const { userId, isAdmin } = req.user!;
+  const project = await stopProject(Number(projectId), userId, isAdmin);
   return res.json({
     message: 'Project stopped successfully',
     project,

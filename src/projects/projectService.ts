@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { docker } from '../docker.js';
 import { git } from '../git.js';
 import { prisma } from '../prisma.js';
-import { BadRequestError, NotFoundError } from '../utils/AppError.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
 
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www';
@@ -395,11 +396,61 @@ export const getProjectById = async (projectId: number) => {
 };
 
 /**
- * Stop a running container and update project status
+ * Helper function to get enrollment with highest access level
+ * Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
  */
-export const stopProject = async (projectId: number) => {
+const getHighestAccessEnrollment = async (
+  userId: number,
+  offeringId: number,
+) => {
+  const enrollments = await prisma.courseOfferingEnrollment.findMany({
+    where: {
+      userId,
+      courseOfferingId: offeringId,
+    },
+  });
+
+  if (enrollments.length === 0) {
+    return null;
+  }
+
+  // If multiple enrollments exist, return the one with highest access level
+  const rolePriority: Record<string, number> = {
+    INSTRUCTOR: 3,
+    STUDENT: 2,
+    VIEWER: 1,
+  };
+
+  return enrollments.reduce((highest, current) => {
+    return rolePriority[current.role] > rolePriority[highest.role]
+      ? current
+      : highest;
+  });
+};
+
+/**
+ * Helper function to check if user is instructor of course offering
+ */
+const checkInstructorAccess = async (userId: number, offeringId: number) => {
+  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
+  return enrollment?.role === COURSE_OFFERING_ROLES.INSTRUCTOR;
+};
+
+/**
+ * Stop a running container and update project status
+ * Validates that the user is an admin, instructor, or team member
+ */
+export const stopProject = async (projectId: number, userId: number, isAdmin: boolean) => {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
+    include: {
+      team: {
+        include: {
+          CourseOffering: true,
+          members: true,
+        },
+      },
+    },
   });
 
   if (!project) {
@@ -408,6 +459,21 @@ export const stopProject = async (projectId: number) => {
 
   if (!project.containerId) {
     throw new BadRequestError('No container associated with this project');
+  }
+
+  // Check permissions - admin, instructor, or team member
+  if (!isAdmin) {
+    const isInstructor = await checkInstructorAccess(
+      userId,
+      project.team.CourseOffering.id,
+    );
+    const isTeamMember = project.team.members.some(
+      (membership) => membership.userId === userId,
+    );
+
+    if (!isInstructor && !isTeamMember) {
+      throw new ForbiddenError('You must be an admin, instructor, or team member to stop this project');
+    }
   }
 
   try {
