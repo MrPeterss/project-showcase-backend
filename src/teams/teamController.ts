@@ -99,7 +99,6 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
         },
       },
       projects: {
-        where: { status: 'running' },
         orderBy: { deployedAt: 'desc' },
         take: 1,
         select: {
@@ -144,7 +143,6 @@ export const getTeam = async (req: Request, res: Response) => {
       },
       CourseOffering: true,
       projects: {
-        where: { status: 'running' },
         orderBy: { deployedAt: 'desc' },
         take: 1,
         select: {
