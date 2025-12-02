@@ -900,7 +900,7 @@ export const tagCourseOfferingProjects = async (
 
   // Get current settings
   const settings = (courseOffering.settings as Record<string, unknown>) || {};
-  const tags = Array.isArray(settings.tags) ? (settings.tags as string[]) : [];
+  const tags = Array.isArray(settings.project_tags) ? (settings.project_tags as string[]) : [];
 
   // Check for duplicate tag
   if (tags.includes(tag)) {
@@ -976,7 +976,7 @@ export const tagCourseOfferingProjects = async (
     data: {
       settings: {
         ...settings,
-        tags: updatedTags,
+        project_tags: updatedTags,
       },
     },
   });
@@ -1004,12 +1004,7 @@ export const removeTagFromCourseOfferingProjects = async (
 
   // Get current settings
   const settings = (courseOffering.settings as Record<string, unknown>) || {};
-  const tags = Array.isArray(settings.tags) ? (settings.tags as string[]) : [];
-
-  // Check if tag exists
-  if (!tags.includes(tag)) {
-    throw new NotFoundError(`Tag "${tag}" not found for this course offering`);
-  }
+  const tags = Array.isArray(settings.project_tags) ? (settings.project_tags as string[]) : [];
 
   // Get all teams for this course offering
   const teams = await prisma.team.findMany({
@@ -1041,13 +1036,13 @@ export const removeTagFromCourseOfferingProjects = async (
     }
   }
 
-  let untagged = 0;
-  let skipped = 0;
-  const errors: Array<{ teamId: number; error: string }> = [];
-
+  // Check if any projects have this tag
   if (projectsWithTag.length === 0) {
-    skipped++;
+    throw new NotFoundError(`Tag "${tag}" not found on any projects in this course offering`);
   }
+
+  let untagged = 0;
+  const errors: Array<{ teamId: number; error: string }> = [];
 
   for (const project of projectsWithTag) {
     try {
@@ -1069,17 +1064,19 @@ export const removeTagFromCourseOfferingProjects = async (
     }
   }
 
-  // Remove tag from course offering settings
-  const updatedTags = tags.filter((t) => t !== tag);
-  await prisma.courseOffering.update({
-    where: { id: courseOfferingId },
-    data: {
-      settings: {
-        ...settings,
-        tags: updatedTags,
+  // Remove tag from course offering settings if it exists there
+  if (tags.includes(tag)) {
+    const updatedTags = tags.filter((t) => t !== tag);
+    await prisma.courseOffering.update({
+      where: { id: courseOfferingId },
+      data: {
+        settings: {
+          ...settings,
+          project_tags: updatedTags,
+        },
       },
-    },
-  });
+    });
+  }
 
-  return { untagged, skipped, errors };
+  return { untagged, errors };
 };
