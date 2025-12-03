@@ -66,6 +66,30 @@ const checkInstructorAccess = async (userId: number, offeringId: number) => {
   ]);
 };
 
+// Helper function to check if a team name already exists (case-insensitive)
+const checkTeamNameExists = async (
+  teamName: string,
+  excludeTeamId?: number,
+): Promise<boolean> => {
+  const allTeams = await prisma.team.findMany({
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+
+  // Check for case-insensitive match
+  const normalizedName = teamName.toLowerCase().trim();
+  
+  return allTeams.some((team) => {
+    // Skip the team we're updating (if excludeTeamId is provided)
+    if (excludeTeamId && team.id === excludeTeamId) {
+      return false;
+    }
+    return team.name.toLowerCase().trim() === normalizedName;
+  });
+};
+
 // GET /course-offerings/:offeringId/teams
 export const getCourseOfferingTeams = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
@@ -208,14 +232,10 @@ export const createTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Check if team name already exists
-  const existingTeam = await prisma.team.findFirst({
-    where: {
-      name,
-    },
-  });
-
-  if (existingTeam) {
+  // Check if team name already exists (case-insensitive)
+  const teamNameExists = await checkTeamNameExists(name);
+  
+  if (teamNameExists) {
     throw new ConflictError('Team name already exists');
   }
 
@@ -303,20 +323,12 @@ export const updateTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Check if new team name conflicts (if name is being changed)
-  if (name && name !== team.name) {
-    const existingTeam = await prisma.team.findFirst({
-      where: {
-        name,
-        courseOfferingId: team.courseOfferingId,
-        id: { not: teamId },
-      },
-    });
-
-    if (existingTeam) {
-      throw new ConflictError(
-        'Team name already exists in this course offering',
-      );
+  // Check if new team name conflicts (case-insensitive, if name is being changed)
+  if (name && name.toLowerCase().trim() !== team.name.toLowerCase().trim()) {
+    const teamNameExists = await checkTeamNameExists(name, teamId);
+    
+    if (teamNameExists) {
+      throw new ConflictError('Team name already exists');
     }
   }
 

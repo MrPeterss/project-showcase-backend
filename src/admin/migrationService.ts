@@ -215,39 +215,72 @@ export const migrateProjectContainer = async (
     containerCreatedAt = new Date();
   }
   
-  // Check if a project already exists for this container
-  const existingProject = await prisma.project.findFirst({
+  // Check if a project already exists for this container (containerId is unique)
+  const existingProject = await prisma.project.findUnique({
     where: {
       containerId: container.id,
+    },
+    include: {
+      team: true,
     },
   });
   
   if (existingProject) {
-    // Update existing project
-    const updatedProject = await prisma.project.update({
-      where: { id: existingProject.id },
-      data: {
+    // If project exists for the same team, just update it
+    if (existingProject.teamId === team.id) {
+      const updatedProject = await prisma.project.update({
+        where: { id: existingProject.id },
+        data: {
+          containerName: updatedContainerInfo.Name,
+          ports: ports as any,
+          imageHash: imageHash || existingProject.imageHash,
+          githubUrl: githubUrl || existingProject.githubUrl,
+          status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
+          deployedAt: existingProject.deployedAt,
+        },
+        include: {
+          team: true,
+        },
+      });
+      
+      return {
+        success: true,
+        alias,
+        project: updatedProject,
+        containerId: container.id,
         containerName: updatedContainerInfo.Name,
-        ports: ports as any,
-        imageHash: imageHash || existingProject.imageHash,
-        githubUrl: githubUrl || existingProject.githubUrl,
-        status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
-        deployedAt: existingProject.deployedAt,
-      },
-      include: {
-        team: true,
-      },
-    });
-    
-    return {
-      success: true,
-      alias,
-      project: updatedProject,
-      containerId: container.id,
-      containerName: updatedContainerInfo.Name,
-      ports,
-      message: 'Project updated successfully',
-    };
+        ports,
+        message: 'Project updated successfully',
+      };
+    } else {
+      // Project exists but is associated with a different team - move it to the new team
+      const movedProject = await prisma.project.update({
+        where: { id: existingProject.id },
+        data: {
+          teamId: team.id,
+          containerName: updatedContainerInfo.Name,
+          ports: ports as any,
+          imageHash: imageHash || existingProject.imageHash,
+          githubUrl: githubUrl || existingProject.githubUrl,
+          status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
+          deployedAt: existingProject.deployedAt,
+          deployedById: deployedById || existingProject.deployedById,
+        },
+        include: {
+          team: true,
+        },
+      });
+      
+      return {
+        success: true,
+        alias,
+        project: movedProject,
+        containerId: container.id,
+        containerName: updatedContainerInfo.Name,
+        ports,
+        message: 'Project moved to new team successfully',
+      };
+    }
   }
   
   // Create new project entry
