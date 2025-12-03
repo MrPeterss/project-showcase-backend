@@ -35,8 +35,10 @@ import {
   deleteCourseOffering,
   getAllCourseOfferings,
   getCourseOffering,
+  lockCourseOfferingServer,
   removeTagFromCourseOfferingProjects,
   tagCourseOfferingProjects,
+  unlockCourseOfferingServer,
   updateCourseOffering,
 } from './courseOfferingController.js';
 
@@ -74,6 +76,19 @@ router.delete(
   requireAdmin,
   validateRequest(courseOfferingParamsSchema),
   deleteCourseOffering,
+);
+
+// Lock/unlock routes
+router.post(
+  '/:offeringId/lock',
+  validateRequest(courseOfferingParamsSchema),
+  lockCourseOfferingServer,
+);
+
+router.post(
+  '/:offeringId/unlock',
+  validateRequest(courseOfferingParamsSchema),
+  unlockCourseOfferingServer,
 );
 
 // Enrollment routes

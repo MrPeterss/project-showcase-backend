@@ -116,10 +116,33 @@ export const deploy = async (
   // Verify team exists
   const team = await prisma.team.findUnique({
     where: { id: teamId },
+    include: {
+      CourseOffering: true,
+    },
   });
 
   if (!team) {
     throw new NotFoundError('Team not found');
+  }
+
+  // Check if course offering is locked
+  const settings = (team.CourseOffering.settings as Record<string, unknown>) || {};
+  const serverLocked = settings.serverLocked === true;
+
+  if (serverLocked) {
+    // Check if user is admin or instructor
+    const isInstructor = await checkInstructorAccess(deployedById, team.CourseOffering.id);
+    
+    // If not admin and not instructor, block deployment
+    // Note: We don't have isAdmin flag here, so we need to check user's admin status
+    const user = await prisma.user.findUnique({
+      where: { id: deployedById },
+      select: { isAdmin: true },
+    });
+
+    if (!user?.isAdmin && !isInstructor) {
+      throw new ForbiddenError('Deployments are locked for this course offering');
+    }
   }
 
   const repoName = extractRepoName(githubUrl);
@@ -461,6 +484,12 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
     throw new BadRequestError('No container associated with this project');
   }
 
+  // Check course offering lock state
+  const offeringSettings =
+    (project.team.CourseOffering.settings as Record<string, unknown>) || {};
+  const serverLocked =
+    (offeringSettings as { serverLocked?: boolean }).serverLocked === true;
+
   // Check permissions - admin, instructor, or team member
   if (!isAdmin) {
     const isInstructor = await checkInstructorAccess(
@@ -470,6 +499,13 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
     const isTeamMember = project.team.members.some(
       (membership) => membership.userId === userId,
     );
+
+    // If server is locked, only admins or instructors can stop projects
+    if (serverLocked && !isInstructor) {
+      throw new ForbiddenError(
+        'Project control is locked for this course offering',
+      );
+    }
 
     if (!isInstructor && !isTeamMember) {
       throw new ForbiddenError('You must be an admin, instructor, or team member to stop this project');
@@ -675,10 +711,32 @@ export const buildWithStreaming = async (
   // Verify team exists
   const team = await prisma.team.findUnique({
     where: { id: teamId },
+    include: {
+      CourseOffering: true,
+    },
   });
 
   if (!team) {
     throw new NotFoundError('Team not found');
+  }
+
+  // Check if course offering is locked
+  const settings = (team.CourseOffering.settings as Record<string, unknown>) || {};
+  const serverLocked = settings.serverLocked === true;
+
+  if (serverLocked) {
+    // Check if user is admin or instructor
+    const isInstructor = await checkInstructorAccess(deployedById, team.CourseOffering.id);
+    
+    // Check user's admin status
+    const user = await prisma.user.findUnique({
+      where: { id: deployedById },
+      select: { isAdmin: true },
+    });
+
+    if (!user?.isAdmin && !isInstructor) {
+      throw new ForbiddenError('Deployments are locked for this course offering');
+    }
   }
 
   const repoName = extractRepoName(githubUrl);

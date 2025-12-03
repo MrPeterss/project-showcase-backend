@@ -349,6 +349,94 @@ export const deleteCourseOffering = async (req: Request, res: Response) => {
   return res.status(204).send();
 };
 
+// POST /course-offerings/:offeringId/lock
+export const lockCourseOfferingServer = async (req: Request, res: Response) => {
+  const { userId, isAdmin } = req.user!;
+  const offeringId = parseInt(req.params.offeringId, 10);
+
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: offeringId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Check permissions - admin or instructor of the offering
+  if (!isAdmin) {
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
+      throw new ForbiddenError(
+        'Only admins or instructors of the course offering can lock deployments',
+      );
+    }
+  }
+
+  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const newSettings = {
+    ...oldSettings,
+    serverLocked: true,
+  };
+
+  const updatedOffering = await prisma.courseOffering.update({
+    where: { id: offeringId },
+    data: { settings: newSettings },
+    include: {
+      course: true,
+      semester: true,
+    },
+  });
+
+  return res.json({
+    message: 'Course offering server locked successfully',
+    courseOffering: updatedOffering,
+  });
+};
+
+// POST /course-offerings/:offeringId/unlock
+export const unlockCourseOfferingServer = async (req: Request, res: Response) => {
+  const { userId, isAdmin } = req.user!;
+  const offeringId = parseInt(req.params.offeringId, 10);
+
+  const courseOffering = await prisma.courseOffering.findUnique({
+    where: { id: offeringId },
+  });
+
+  if (!courseOffering) {
+    throw new NotFoundError('Course offering not found');
+  }
+
+  // Check permissions - admin or instructor of the offering
+  if (!isAdmin) {
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
+      throw new ForbiddenError(
+        'Only admins or instructors of the course offering can unlock deployments',
+      );
+    }
+  }
+
+  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const newSettings = {
+    ...oldSettings,
+    serverLocked: false,
+  };
+
+  const updatedOffering = await prisma.courseOffering.update({
+    where: { id: offeringId },
+    data: { settings: newSettings },
+    include: {
+      course: true,
+      semester: true,
+    },
+  });
+
+  return res.json({
+    message: 'Course offering server unlocked successfully',
+    courseOffering: updatedOffering,
+  });
+};
+
 // POST /course-offerings/:offeringId/projects/tag
 export const tagCourseOfferingProjects = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
