@@ -192,17 +192,20 @@ export const getCourseOffering = async (req: Request, res: Response) => {
     userRole = SYSTEM_ROLES.ADMIN;
   }
 
-  // Check if user should have access to enrollments and settings
+  // Check if user should have access to enrollments
   const hasInstructorAccess =
     userRole === COURSE_OFFERING_ROLES.INSTRUCTOR ||
     userRole === SYSTEM_ROLES.ADMIN;
 
-  // Omit enrollments and settings if user is not an instructor or admin
+  const isViewer = userRole === COURSE_OFFERING_ROLES.VIEWER;
+
+  // Omit enrollments if user is not an instructor or admin
+  // Omit settings if user is a viewer (students and instructors can see serverLocked status)
   const response = {
     ...courseOffering,
     userRole,
     ...(!hasInstructorAccess && { enrollments: undefined }),
-    ...(!hasInstructorAccess && { settings: undefined }),
+    ...(isViewer && { settings: undefined }),
   };
 
   return res.json(response);
