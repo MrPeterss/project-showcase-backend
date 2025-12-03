@@ -7,6 +7,7 @@ import { prisma } from '../prisma.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
 import { NotFoundError } from '../utils/AppError.js';
 import * as adminService from './adminService.js';
+import { migrateProjectContainer } from './migrationService.js';
 
 /**
  * Normalize container name: lowercase and replace spaces with dashes
@@ -60,6 +61,44 @@ export const triggerPruning = async (_req: Request, res: Response) => {
   } catch (error) {
     return res.status(500).json({
       error: 'Failed to prune projects',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
+ * Migrate a project container from old network to projects_network
+ */
+export const migrateProject = async (req: Request, res: Response) => {
+  try {
+    const { projectName, teamId, githubUrl } = req.body;
+    const { userId } = req.user!;
+    
+    const result = await migrateProjectContainer(
+      projectName,
+      teamId,
+      githubUrl,
+      userId,
+    );
+    
+    return res.status(201).json({
+      message: result.message,
+      alias: result.alias,
+      project: result.project,
+      containerId: result.containerId,
+      containerName: result.containerName,
+      ports: result.ports,
+    });
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({
+        error: error.message,
+        projectName: req.body.projectName,
+      });
+    }
+    
+    return res.status(500).json({
+      error: 'Failed to migrate project',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

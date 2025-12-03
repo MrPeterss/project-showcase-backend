@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { validateRequest } from '../middleware/validateRequest.js';
 import {
+  migrateProjectSchema,
   projectIdParamsSchema,
   updateUserNameSchema,
   userIdParamsSchema,
@@ -9,6 +10,7 @@ import {
 import {
   demoteUser,
   getAllProjects,
+  migrateProject,
   pruneProject,
   promoteUser,
   triggerPruning,
@@ -48,6 +50,13 @@ router.put(
   validateRequest(userIdParamsSchema),
   validateRequest(updateUserNameSchema),
   updateUserName,
+);
+
+// Project migration route
+router.post(
+  '/projects/migrate',
+  validateRequest(migrateProjectSchema),
+  migrateProject,
 );
 
 export default router;

@@ -36,3 +36,11 @@ export const updateUserNameSchema = z.object({
   }),
 });
 
+export const migrateProjectSchema = z.object({
+  body: z.object({
+    projectName: z.string().min(1, 'Project name (container name) is required'),
+    teamId: z.number().int().positive(),
+    githubUrl: z.string().url().optional(),
+  }),
+});
+
