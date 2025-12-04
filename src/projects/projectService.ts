@@ -1041,8 +1041,8 @@ export const tagCourseOfferingProjects = async (
 
 /**
  * Remove a tag from all projects in a course offering.
- * Sets the project's tag field to null and updates imageName back to latest.
- * Removes tag from course offering settings.
+ * Sets the project's tag field to null for any projects that have the tag.
+ * Always removes tag from course offering settings, even if no projects have it.
  */
 export const removeTagFromCourseOfferingProjects = async (
   courseOfferingId: number,
@@ -1091,14 +1091,10 @@ export const removeTagFromCourseOfferingProjects = async (
     }
   }
 
-  // Check if any projects have this tag
-  if (projectsWithTag.length === 0) {
-    throw new NotFoundError(`Tag "${tag}" not found on any projects in this course offering`);
-  }
-
   let untagged = 0;
   const errors: Array<{ teamId: number; error: string }> = [];
 
+  // Untag projects if any have this tag
   for (const project of projectsWithTag) {
     try {
       // Update the project's tag to null
