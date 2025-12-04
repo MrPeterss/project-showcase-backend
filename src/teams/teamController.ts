@@ -206,7 +206,34 @@ export const getTeam = async (req: Request, res: Response) => {
     }
   }
 
-  return res.json(team);
+  // Get all projects with tags for this team to build the tags list
+  const projectsWithTags = await prisma.project.findMany({
+    where: {
+      teamId,
+      tag: { not: null },
+    },
+    orderBy: { deployedAt: 'desc' },
+    select: {
+      tag: true,
+      deployedAt: true,
+    },
+  });
+
+  // Extract unique tags in order (most recent first)
+  const seenTags = new Set<string>();
+  const orderedTags: string[] = [];
+  
+  for (const project of projectsWithTags) {
+    if (project.tag && !seenTags.has(project.tag)) {
+      seenTags.add(project.tag);
+      orderedTags.push(project.tag);
+    }
+  }
+
+  return res.json({
+    ...team,
+    tags: orderedTags,
+  });
 };
 
 // POST /course-offerings/:offeringId/teams

@@ -11,6 +11,7 @@ import {
   streamProjectLogs,
   streamBuildLogs,
   buildWithStreaming,
+  deployFromProject,
 } from './projectService.js';
 import { docker } from '../docker.js';
 
@@ -317,4 +318,16 @@ export const deployProjectWithStreamingController = async (
       res.end();
     }
   }
+};
+
+export const redeployProjectController = async (req: Request, res: Response) => {
+  const { projectId } = req.params;
+  const { userId } = req.user!;
+
+  const result = await deployFromProject(Number(projectId), userId);
+
+  return res.status(201).json({
+    message: 'Project redeployed successfully',
+    ...result,
+  });
 };

@@ -99,21 +99,22 @@ model TeamMembership {
 }
 
 model Project {
-  id            Int       @id @default(autoincrement())
-  githubUrl     String
-  imageHash     String // Docker image ID/hash (sha256:...)
-  tag           String? // Optional tag for the image (e.g., "v1.0")
-  containerId   String?   @unique
-  containerName String?
-  status        String // running, stopped, failed, etc.
-  ports         Json? // Store port mappings as JSON
-  buildLogs     String? // Store build logs as text
-  buildArgs     Json? // Store build arguments as JSON
-  dataFile      String? // Path to uploaded data file on host
-  deployedAt    DateTime  @default(now())
-  stoppedAt     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                   Int       @id @default(autoincrement())
+  githubUrl            String
+  imageHash            String // Docker image ID/hash (sha256:...)
+  tag                  String? // Optional tag for the image (e.g., "v1.0")
+  containerId          String?   @unique
+  containerName        String?
+  status               String // running, stopped, failed, etc.
+  ports                Json? // Store port mappings as JSON
+  buildLogs            String? // Store build logs as text
+  buildArgs            Json? // Store build arguments as JSON
+  dataFile             String? // Path to uploaded data file on host
+  originalDataFileName String? // Original filename of the uploaded data file
+  deployedAt           DateTime  @default(now())
+  stoppedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   team         Team  @relation(fields: [teamId], references: [id])
   teamId       Int

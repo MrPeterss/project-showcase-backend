@@ -157,6 +157,8 @@ export const deploy = async (
       status: 'building',
       deployedById,
       buildArgs: buildArgs || {},
+      dataFile: dataFilePath || null,
+      originalDataFileName: originalFileName || null,
     },
   });
 
@@ -754,6 +756,7 @@ export const buildWithStreaming = async (
       deployedById,
       buildArgs: buildArgs || {},
       dataFile: dataFilePath || null,
+      originalDataFileName: originalFileName || null,
     },
   });
 
@@ -939,8 +942,8 @@ export const buildWithStreaming = async (
 };
 
 /**
- * Tag the most recent running project image for all teams in a course offering.
- * Only tags projects that are currently running.
+ * Tag the most recent project for all teams in a course offering.
+ * Tags the most recent project regardless of status (running, stopped, etc).
  * Updates the project's tag field in the database and adds tag to course offering settings.
  */
 export const tagCourseOfferingProjects = async (
@@ -988,12 +991,6 @@ export const tagCourseOfferingProjects = async (
     }
 
     const mostRecentProject = team.projects[0];
-
-    // Only tag if the project is running
-    if (mostRecentProject.status !== 'running') {
-      skipped++;
-      continue;
-    }
 
     try {
       // Get the Docker image by hash
@@ -1137,4 +1134,201 @@ export const removeTagFromCourseOfferingProjects = async (
   }
 
   return { untagged, errors };
+};
+
+/**
+ * Deploy a project using an existing project entry's configuration.
+ * This reuses the stored image, build args, and data file without rebuilding.
+ * Useful for redeploying tagged projects.
+ */
+export const deployFromProject = async (
+  sourceProjectId: number,
+  deployedById: number,
+) => {
+  // Get the source project
+  const sourceProject = await prisma.project.findUnique({
+    where: { id: sourceProjectId },
+    include: {
+      team: {
+        include: {
+          CourseOffering: true,
+        },
+      },
+    },
+  });
+
+  if (!sourceProject) {
+    throw new NotFoundError('Project not found');
+  }
+
+  // Verify the image exists
+  try {
+    const image = docker.getImage(sourceProject.imageHash);
+    await image.inspect();
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode === 404) {
+      throw new NotFoundError('Docker image not found. The project may need to be rebuilt.');
+    }
+    throw error;
+  }
+
+  // Check if course offering is locked
+  const settings = (sourceProject.team.CourseOffering.settings as Record<string, unknown>) || {};
+  const serverLocked = settings.serverLocked === true;
+
+  if (serverLocked) {
+    // Check if user is admin or instructor
+    const isInstructor = await checkInstructorAccess(deployedById, sourceProject.team.CourseOffering.id);
+    
+    // Check user's admin status
+    const user = await prisma.user.findUnique({
+      where: { id: deployedById },
+      select: { isAdmin: true },
+    });
+
+    if (!user?.isAdmin && !isInstructor) {
+      throw new ForbiddenError('Deployments are locked for this course offering');
+    }
+  }
+
+  // Verify data file exists if specified
+  if (sourceProject.dataFile && !fs.existsSync(sourceProject.dataFile)) {
+    throw new NotFoundError('Data file not found. The file may have been deleted.');
+  }
+
+  // Create a new project record
+  const newProject = await prisma.project.create({
+    data: {
+      teamId: sourceProject.teamId,
+      githubUrl: sourceProject.githubUrl,
+      imageHash: sourceProject.imageHash,
+      tag: sourceProject.tag,
+      status: 'deploying',
+      buildArgs: sourceProject.buildArgs || {},
+      dataFile: sourceProject.dataFile,
+      originalDataFileName: sourceProject.originalDataFileName,
+      buildLogs: sourceProject.buildLogs,
+      deployedById,
+    },
+  });
+
+  try {
+    // Find and stop any running projects for this team
+    const runningProjects = await prisma.project.findMany({
+      where: {
+        teamId: sourceProject.teamId,
+        status: 'running',
+      },
+      select: {
+        id: true,
+        containerId: true,
+      },
+    });
+
+    // Stop all running containers for this team
+    for (const runningProject of runningProjects) {
+      if (runningProject.containerId) {
+        try {
+          const container = docker.getContainer(runningProject.containerId);
+          await container.stop();
+          
+          // Update project status to stopped
+          await prisma.project.update({
+            where: { id: runningProject.id },
+            data: {
+              status: 'stopped',
+              stoppedAt: new Date(),
+            },
+          });
+          console.log(`Stopped running container for project ${runningProject.id}`);
+        } catch (error) {
+          console.log(
+            `Failed to stop container ${runningProject.containerId}:`,
+            error,
+          );
+        }
+      }
+    }
+
+    // Stop and remove existing container with the same name if it exists
+    const containerName = normalizeContainerName(sourceProject.team.name);
+    
+    try {
+      const existingContainer = docker.getContainer(containerName);
+      await existingContainer.stop();
+      console.log(`Stopped existing container: ${containerName}`);
+    } catch (stopError) {
+      console.log(`Failed to stop container ${containerName}:`, stopError);
+    }
+
+    try {
+      const existingContainer = docker.getContainer(containerName);
+      await existingContainer.remove();
+      console.log(`Removed existing container: ${containerName}`);
+    } catch (removeError) {
+      console.log(`Failed to remove container ${containerName}:`, removeError);
+    }
+
+    // Ensure the projects network exists
+    await ensureProjectsNetwork();
+
+    // Run the container with the same configuration
+    const containerConfig: unknown = {
+      Image: sourceProject.imageHash,
+      name: containerName,
+      HostConfig: {
+        AutoRemove: false,
+        NetworkMode: PROJECTS_NETWORK,
+        Memory: 800 * 1024 * 1024, // 800MB
+        Binds: sourceProject.dataFile
+          ? [`${getHostDataFilePath(sourceProject.dataFile)}:${getContainerDataFilePath(sourceProject.dataFile, sourceProject.originalDataFileName || undefined)}:ro`]
+          : undefined,
+      },
+      NetworkingConfig: {
+        EndpointsConfig: {
+          [PROJECTS_NETWORK]: {
+            Aliases: [containerName],
+          },
+        },
+      },
+    };
+
+    const container = await docker.createContainer(containerConfig!);
+    await container.start();
+
+    // Get container info
+    const containerInfo = await container.inspect();
+
+    // Update project with container information
+    const updatedProject = await prisma.project.update({
+      where: { id: newProject.id },
+      data: {
+        containerId: container.id,
+        containerName: containerInfo.Name,
+        status: 'running',
+        ports: containerInfo.NetworkSettings.Ports,
+        deployedAt: new Date(),
+      },
+      include: {
+        team: true,
+      },
+    });
+
+    return {
+      success: true,
+      project: updatedProject,
+      imageHash: sourceProject.imageHash,
+      containerId: container.id,
+      containerName: containerInfo.Name,
+      ports: containerInfo.NetworkSettings.Ports,
+      state: containerInfo.State,
+    };
+  } catch (error) {
+    // Update project status to failed
+    await prisma.project.update({
+      where: { id: newProject.id },
+      data: { status: 'failed' },
+    });
+    throw error;
+  }
 };

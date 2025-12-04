@@ -15,6 +15,7 @@ import {
   stopProjectSchema,
   streamProjectLogsSchema,
   streamBuildLogsSchema,
+  redeployProjectSchema,
 } from './project.schema.js';
 import {
   deployProject,
@@ -25,6 +26,7 @@ import {
   streamProjectLogsController,
   streamBuildLogsController,
   deployProjectWithStreamingController,
+  redeployProjectController,
 } from './projectController.js';
 
 // Configure multer for file uploads
@@ -75,6 +77,12 @@ router.post(
   stopProjectController,
 );
 
+// Redeploy an existing project using its stored image and data
+router.post(
+  '/:projectId/redeploy',
+  validateRequest(redeployProjectSchema),
+  redeployProjectController,
+);
 
 // Stream logs for a specific project
 router.get(

@@ -76,3 +76,9 @@ export const streamBuildLogsSchema = z.object({
     projectId: z.string().transform(Number).pipe(z.number().int().positive()),
   }),
 });
+
+export const redeployProjectSchema = z.object({
+  params: z.object({
+    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+  }),
+});
