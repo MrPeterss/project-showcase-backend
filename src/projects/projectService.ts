@@ -1115,19 +1115,18 @@ export const removeTagFromCourseOfferingProjects = async (
     }
   }
 
-  // Remove tag from course offering settings if it exists there
-  if (tags.includes(tag)) {
-    const updatedTags = tags.filter((t) => t !== tag);
-    await prisma.courseOffering.update({
-      where: { id: courseOfferingId },
-      data: {
-        settings: {
-          ...settings,
-          project_tags: updatedTags,
-        },
+  // Always update settings to ensure tag is removed
+  // Filter out the tag even if it doesn't exist (idempotent operation)
+  const updatedTags = tags.filter((t) => t !== tag);
+  await prisma.courseOffering.update({
+    where: { id: courseOfferingId },
+    data: {
+      settings: {
+        ...settings,
+        project_tags: updatedTags,
       },
-    });
-  }
+    },
+  });
 
   return { untagged, errors };
 };
