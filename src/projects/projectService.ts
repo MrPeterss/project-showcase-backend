@@ -950,6 +950,9 @@ export const tagCourseOfferingProjects = async (
   courseOfferingId: number,
   tag: string,
 ) => {
+  console.log(`[TAG DEBUG] Starting tagCourseOfferingProjects`);
+  console.log(`[TAG DEBUG] Course Offering ID: ${courseOfferingId}, Tag: "${tag}"`);
+
   // Get course offering to check settings
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: courseOfferingId },
@@ -962,6 +965,8 @@ export const tagCourseOfferingProjects = async (
   // Get current settings
   const settings = (courseOffering.settings as Record<string, unknown>) || {};
   const tags = Array.isArray(settings.project_tags) ? (settings.project_tags as string[]) : [];
+
+  console.log(`[TAG DEBUG] Current tags in settings:`, tags);
 
   // Check for duplicate tag
   if (tags.includes(tag)) {
@@ -979,6 +984,8 @@ export const tagCourseOfferingProjects = async (
     },
   });
 
+  console.log(`[TAG DEBUG] Found ${teams.length} teams for course offering ${courseOfferingId}`);
+
   let tagged = 0;
   let skipped = 0;
   const errors: Array<{ teamId: number; error: string }> = [];
@@ -993,13 +1000,24 @@ export const tagCourseOfferingProjects = async (
     const mostRecentProject = team.projects[0];
 
     try {
+      console.log(`[TAG DEBUG] Processing team: ${team.name} (ID: ${team.id})`);
+      console.log(`[TAG DEBUG] Project ID: ${mostRecentProject.id}, ImageHash: ${mostRecentProject.imageHash}`);
+      
       // Get the Docker image by hash
       const image = docker.getImage(mostRecentProject.imageHash);
 
+      // Get image info to inspect RepoTags
+      const imageInfo = await image.inspect();
+      console.log(`[TAG DEBUG] Image RepoTags:`, imageInfo.RepoTags);
+      console.log(`[TAG DEBUG] Image RepoDigests:`, imageInfo.RepoDigests);
+
       const baseRepoName = normalizeContainerName(team.name);
+      console.log(`[TAG DEBUG] Team name: "${team.name}" -> Normalized: "${baseRepoName}"`);
+      console.log(`[TAG DEBUG] Tagging image with repo: "${baseRepoName}", tag: "${tag}"`);
 
       // Tag the image with the new tag
       await image.tag({ repo: baseRepoName, tag });
+      console.log(`[TAG DEBUG] Successfully tagged image for team ${team.id}`);
 
       // Update the project's tag field in the database
       // The imageHash stays the same (tagging doesn't change the hash)
@@ -1012,6 +1030,15 @@ export const tagCourseOfferingProjects = async (
 
       tagged++;
     } catch (error) {
+      console.error(`[TAG DEBUG] Error tagging image for team ${team.id}:`, error);
+      console.error(`[TAG DEBUG] Error details:`, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        code: (error as { code?: string }).code,
+        errno: (error as { errno?: number }).errno,
+        syscall: (error as { syscall?: string }).syscall,
+        hostname: (error as { hostname?: string }).hostname,
+      });
       errors.push({
         teamId: team.id,
         error: error instanceof Error ? error.message : 'Unknown error',
