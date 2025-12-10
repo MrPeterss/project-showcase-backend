@@ -90,6 +90,66 @@ const checkTeamNameExists = async (
   });
 };
 
+// Helper function to get the appropriate project for a team
+// Returns the newest running project if available, otherwise the newest project regardless of status
+const getTeamProject = async (teamId: number) => {
+  // First, try to get the newest running project
+  const runningProject = await prisma.project.findFirst({
+    where: {
+      teamId,
+      status: 'running',
+    },
+    orderBy: { deployedAt: 'desc' },
+    select: {
+      id: true,
+      githubUrl: true,
+      imageHash: true,
+      containerId: true,
+      containerName: true,
+      status: true,
+      ports: true,
+      deployedAt: true,
+      stoppedAt: true,
+      deployedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  // If we found a running project, return it
+  if (runningProject) {
+    return runningProject;
+  }
+
+  // Otherwise, return the newest project regardless of status
+  return await prisma.project.findFirst({
+    where: { teamId },
+    orderBy: { deployedAt: 'desc' },
+    select: {
+      id: true,
+      githubUrl: true,
+      imageHash: true,
+      containerId: true,
+      containerName: true,
+      status: true,
+      ports: true,
+      deployedAt: true,
+      stoppedAt: true,
+      deployedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+};
+
 // GET /course-offerings/:offeringId/teams
 export const getCourseOfferingTeams = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
@@ -122,32 +182,21 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
           },
         },
       },
-      projects: {
-        orderBy: { deployedAt: 'desc' },
-        take: 1,
-        select: {
-          id: true,
-          githubUrl: true,
-          imageHash: true,
-          containerId: true,
-          containerName: true,
-          status: true,
-          ports: true,
-          deployedAt: true,
-          stoppedAt: true,
-          deployedBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
     },
   });
 
-  return res.json(teams);
+  // Get the appropriate project for each team
+  const teamsWithProjects = await Promise.all(
+    teams.map(async (team) => {
+      const project = await getTeamProject(team.id);
+      return {
+        ...team,
+        projects: project ? [project] : [],
+      };
+    }),
+  );
+
+  return res.json(teamsWithProjects);
 };
 
 // GET /teams/:teamId
@@ -166,28 +215,6 @@ export const getTeam = async (req: Request, res: Response) => {
         },
       },
       CourseOffering: true,
-      projects: {
-        orderBy: { deployedAt: 'desc' },
-        take: 1,
-        select: {
-          id: true,
-          githubUrl: true,
-          imageHash: true,
-          containerId: true,
-          containerName: true,
-          status: true,
-          ports: true,
-          deployedAt: true,
-          stoppedAt: true,
-          deployedBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
     },
   });
 
@@ -206,6 +233,9 @@ export const getTeam = async (req: Request, res: Response) => {
     }
   }
 
+  // Get the appropriate project for this team
+  const project = await getTeamProject(teamId);
+
   // Get all projects with tags for this team to build the tags list
   const projectsWithTags = await prisma.project.findMany({
     where: {
@@ -223,15 +253,16 @@ export const getTeam = async (req: Request, res: Response) => {
   const seenTags = new Set<string>();
   const orderedTags: string[] = [];
   
-  for (const project of projectsWithTags) {
-    if (project.tag && !seenTags.has(project.tag)) {
-      seenTags.add(project.tag);
-      orderedTags.push(project.tag);
+  for (const projectWithTag of projectsWithTags) {
+    if (projectWithTag.tag && !seenTags.has(projectWithTag.tag)) {
+      seenTags.add(projectWithTag.tag);
+      orderedTags.push(projectWithTag.tag);
     }
   }
 
   return res.json({
     ...team,
+    projects: project ? [project] : [],
     tags: orderedTags,
   });
 };
@@ -681,28 +712,21 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
               },
             },
           },
-          projects: {
-            orderBy: { deployedAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              githubUrl: true,
-              imageHash: true,
-              containerId: true,
-              containerName: true,
-              status: true,
-              ports: true,
-              deployedAt: true,
-              stoppedAt: true,
-            },
-          },
         },
       },
     },
   });
 
-  // Return just the teams (without course offering info since it's already in the URL)
-  const teams = teamMemberships.map((membership) => membership.team);
+  // Get the appropriate project for each team
+  const teams = await Promise.all(
+    teamMemberships.map(async (membership) => {
+      const project = await getTeamProject(membership.team.id);
+      return {
+        ...membership.team,
+        projects: project ? [project] : [],
+      };
+    }),
+  );
 
   return res.json(teams);
 };
