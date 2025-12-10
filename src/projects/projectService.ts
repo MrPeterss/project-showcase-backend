@@ -996,12 +996,7 @@ export const tagCourseOfferingProjects = async (
       // Get the Docker image by hash
       const image = docker.getImage(mostRecentProject.imageHash);
 
-      // Get image info to find repo name
-      const imageInfo = await image.inspect();
-      const repoTags = imageInfo.RepoTags || [];
-      const baseRepoName = repoTags.length > 0 
-        ? repoTags[0].split(':')[0] 
-        : `project-${mostRecentProject.id}`;
+      const baseRepoName = normalizeContainerName(team.name);
 
       // Tag the image with the new tag
       await image.tag({ repo: baseRepoName, tag });
