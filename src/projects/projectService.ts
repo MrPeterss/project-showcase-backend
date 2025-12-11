@@ -1011,6 +1011,14 @@ export const tagCourseOfferingProjects = async (
       // Tag the image with the new tag
       await image.tag({ repo: imageName, tag });
       tagged++;
+
+      // Update the project's tag field in the database
+      await prisma.project.update({
+        where: { id: preferredProject.id },
+        data: {
+          tag,
+        },
+      });
     } catch (error) {
       // Catch any other errors (like database errors)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1078,7 +1086,7 @@ export const removeTagFromCourseOfferingProjects = async (
   for (const team of teams) {
     for (const project of team.projects) {
       // Use type assertion to access tag field (TypeScript cache issue)
-      const projectTag = (project as { tag?: string | null }).tag;
+      const projectTag = project.tag;
       if (projectTag === tag) {
         projectsWithTag.push({
           id: project.id,
