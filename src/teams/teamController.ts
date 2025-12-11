@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
+import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import {
   ConflictError,
   ForbiddenError,
@@ -93,58 +94,21 @@ const checkTeamNameExists = async (
 // Helper function to get the appropriate project for a team
 // Returns the newest running project if available, otherwise the newest project regardless of status
 const getTeamProject = async (teamId: number) => {
-  // First, try to get the newest running project
-  const runningProject = await prisma.project.findFirst({
-    where: {
-      teamId,
-      status: 'running',
-    },
-    orderBy: { deployedAt: 'desc' },
-    select: {
-      id: true,
-      githubUrl: true,
-      imageHash: true,
-      containerId: true,
-      containerName: true,
-      status: true,
-      ports: true,
-      deployedAt: true,
-      stoppedAt: true,
-      deployedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-  });
-
-  // If we found a running project, return it
-  if (runningProject) {
-    return runningProject;
-  }
-
-  // Otherwise, return the newest project regardless of status
-  return await prisma.project.findFirst({
-    where: { teamId },
-    orderBy: { deployedAt: 'desc' },
-    select: {
-      id: true,
-      githubUrl: true,
-      imageHash: true,
-      containerId: true,
-      containerName: true,
-      status: true,
-      ports: true,
-      deployedAt: true,
-      stoppedAt: true,
-      deployedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
+  return await getTeamPreferredProject(teamId, {
+    id: true,
+    githubUrl: true,
+    imageHash: true,
+    containerId: true,
+    containerName: true,
+    status: true,
+    ports: true,
+    deployedAt: true,
+    stoppedAt: true,
+    deployedBy: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
       },
     },
   });

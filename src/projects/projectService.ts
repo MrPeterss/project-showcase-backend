@@ -6,6 +6,7 @@ import { docker } from '../docker.js';
 import { git } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
+import { getTeamPreferredProject } from '../utils/projectUtils.js';
 
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www';
@@ -100,7 +101,6 @@ export const listAllImages = async () => {
     virtualSize: image.VirtualSize,
   }));
 };
-
 
 /**
  * Clone a GitHub repository, build a Docker image from it, and run a container
@@ -947,8 +947,8 @@ export const buildWithStreaming = async (
 };
 
 /**
- * Tag the most recent project for all teams in a course offering.
- * Tags the most recent project regardless of status (running, stopped, etc).
+ * Tag the preferred project for all teams in a course offering.
+ * Tags the newest running project if available, otherwise the most recent project regardless of status.
  * Updates the project's tag field in the database and adds tag to course offering settings.
  */
 export const tagCourseOfferingProjects = async (
@@ -976,12 +976,6 @@ export const tagCourseOfferingProjects = async (
   // Get all teams for this course offering
   const teams = await prisma.team.findMany({
     where: { courseOfferingId },
-    include: {
-      projects: {
-        orderBy: { deployedAt: 'desc' },
-        take: 1, // Get only the most recent project
-      },
-    },
   });
 
   console.log(`[TAG DEBUG] Found ${teams.length} teams for course offering ${courseOfferingId}`);
@@ -991,19 +985,19 @@ export const tagCourseOfferingProjects = async (
   const errors: Array<{ teamId: number; error: string }> = [];
 
   for (const team of teams) {
-    // Check if team has any projects
-    if (team.projects.length === 0) {
+    // Get the preferred project (running if available, otherwise most recent)
+    const preferredProject = await getTeamPreferredProject(team.id);
+    
+    if (!preferredProject) {
       skipped++;
       continue;
     }
-
-    const mostRecentProject = team.projects[0];
 
     try {
       const baseRepoName = normalizeContainerName(team.name);
       
       // Get the Docker image by hash
-      const image = docker.getImage(mostRecentProject.imageHash);
+      const image = docker.getImage(preferredProject.imageHash);
 
       // Verify image exists
       let imageExists = false;
@@ -1011,7 +1005,7 @@ export const tagCourseOfferingProjects = async (
         await image.inspect();
         imageExists = true;
       } catch (inspectError) {
-        console.warn(`Image ${mostRecentProject.imageHash} not found for team ${team.id}, skipping Docker tag`);
+        console.warn(`Image ${preferredProject.imageHash} not found for team ${team.id}, skipping Docker tag`);
       }
 
       // Only attempt Docker tagging if image exists
@@ -1048,7 +1042,7 @@ export const tagCourseOfferingProjects = async (
       // Update the project's tag field in the database
       // This is the primary operation - Docker tagging is secondary
       await prisma.project.update({
-        where: { id: mostRecentProject.id },
+        where: { id: preferredProject.id },
         data: {
           tag,
         },
