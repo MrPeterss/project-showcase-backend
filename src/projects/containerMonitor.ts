@@ -217,10 +217,8 @@ export const pruneUntaggedProjects = async (): Promise<{
     const results = await Promise.allSettled(
       projectsToPrune.map(async (project: { id: number; containerId: string | null; imageHash: string | null; dataFile: string | null }) => {
         const errors: string[] = [];
-        let containerRemoved = !project.containerId;
-
+        
         const containerProtected = project.containerId && protectedContainers.has(project.containerId);
-
         if (project.containerId && !containerProtected) {
           try {
             const container = docker.getContainer(project.containerId);
