@@ -994,60 +994,22 @@ export const tagCourseOfferingProjects = async (
     }
 
     try {
-      const baseRepoName = normalizeContainerName(team.name);
+      const imageName = normalizeContainerName(team.name);
       
       // Get the Docker image by hash
       const image = docker.getImage(preferredProject.imageHash);
 
       // Verify image exists
-      let imageExists = false;
       try {
         await image.inspect();
-        imageExists = true;
       } catch (inspectError) {
         console.warn(`Image ${preferredProject.imageHash} not found for team ${team.id}, skipping Docker tag`);
+        skipped++;
+        continue;
       }
 
-      // Only attempt Docker tagging if image exists
-      // Docker tagging is optional - we primarily care about the database tag
-      if (imageExists) {
-        try {
-          // Use a prefixed repo name to avoid Docker interpreting it as a registry hostname
-          // Format: "local/teamname" instead of just "teamname"
-          const repoName = `local/${baseRepoName}`;
-          
-          // Tag the image with the new tag
-          // Use promise-based API with timeout
-          const tagPromise = image.tag({ repo: repoName, tag });
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Image tagging operation timed out')), 10000);
-          });
-
-          await Promise.race([tagPromise, timeoutPromise]);
-          console.log(`Successfully tagged image for team ${team.id} as ${repoName}:${tag}`);
-        } catch (tagError) {
-          // If tagging fails, log but continue - database tag is what matters
-          const errorMessage = tagError instanceof Error ? tagError.message : 'Unknown tagging error';
-          
-          // Check if it's a DNS/network error
-          if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
-            console.warn(`DNS/Network error during Docker tagging for team ${team.id} (${team.name}). This is non-critical - database tag will still be updated.`);
-          } else {
-            console.warn(`Docker tagging failed for team ${team.id} (${team.name}): ${errorMessage}. Continuing with database update.`);
-          }
-          // Don't throw - we'll still update the database tag
-        }
-      }
-
-      // Update the project's tag field in the database
-      // This is the primary operation - Docker tagging is secondary
-      await prisma.project.update({
-        where: { id: preferredProject.id },
-        data: {
-          tag,
-        },
-      });
-
+      // Tag the image with the new tag
+      await image.tag({ repo: imageName, tag });
       tagged++;
     } catch (error) {
       // Catch any other errors (like database errors)
