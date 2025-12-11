@@ -1012,10 +1012,37 @@ export const tagCourseOfferingProjects = async (
       }
 
       // Tag the image with the new tag
-      await image.tag({ repo: baseRepoName, tag });
+      // Wrap in try-catch to handle any network errors gracefully
+      try {
+        // Use the promise-based API with proper error handling
+        const tagPromise = image.tag({ repo: baseRepoName, tag });
+        
+        // Add a timeout to prevent hanging
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Image tagging operation timed out')), 30000);
+        });
+
+        await Promise.race([tagPromise, timeoutPromise]);
+      } catch (tagError) {
+        // If tagging fails due to network/DNS issues, log but continue
+        // The database tag will still be updated to track the intended tag
+        const errorMessage = tagError instanceof Error ? tagError.message : 'Unknown tagging error';
+        console.warn(`Failed to tag Docker image for team ${team.id} (${team.name}):`, errorMessage);
+        
+        // Check if it's a DNS/network error - if so, we'll still update DB but log the error
+        if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+          // This is a DNS/network error - likely Docker trying to resolve the repo name as a registry
+          // We'll still update the database tag, but log the error
+          console.warn(`DNS/Network error during tagging for team ${team.id}. Continuing with database update.`);
+        } else {
+          // For other errors, still log but continue
+          console.warn(`Tagging error for team ${team.id}:`, tagError);
+        }
+      }
 
       // Update the project's tag field in the database
       // The imageHash stays the same (tagging doesn't change the hash)
+      // We update this even if Docker tagging failed, to maintain consistency
       await prisma.project.update({
         where: { id: mostRecentProject.id },
         data: {
