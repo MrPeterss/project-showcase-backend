@@ -217,8 +217,9 @@ export const pruneUntaggedProjects = async (): Promise<{
     const results = await Promise.allSettled(
       projectsToPrune.map(async (project: { id: number; containerId: string | null; imageHash: string | null; dataFile: string | null }) => {
         const errors: string[] = [];
-        
+
         const containerProtected = project.containerId && protectedContainers.has(project.containerId);
+
         if (project.containerId && !containerProtected) {
           try {
             const container = docker.getContainer(project.containerId);
@@ -229,23 +230,18 @@ export const pruneUntaggedProjects = async (): Promise<{
             }
             try {
               await container.remove();
-              containerRemoved = true;
             } catch (error) {
               if ((error as { statusCode?: number }).statusCode !== 404) {
                 errors.push(`Failed to remove container: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                containerRemoved = false;
               } else {
                 // 404 means container doesn't exist, which is fine
-                containerRemoved = true;
               }
             }
           } catch (error) {
             if ((error as { statusCode?: number }).statusCode !== 404) {
               errors.push(`Container error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-              containerRemoved = false;
             } else {
               // 404 means container doesn't exist, which is fine
-              containerRemoved = true;
             }
           }
         }
