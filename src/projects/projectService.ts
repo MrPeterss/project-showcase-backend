@@ -1005,44 +1005,48 @@ export const tagCourseOfferingProjects = async (
       // Get the Docker image by hash
       const image = docker.getImage(mostRecentProject.imageHash);
 
+      // Verify image exists
+      let imageExists = false;
       try {
         await image.inspect();
+        imageExists = true;
       } catch (inspectError) {
-        // Continue anyway
+        console.warn(`Image ${mostRecentProject.imageHash} not found for team ${team.id}, skipping Docker tag`);
       }
 
-      // Tag the image with the new tag
-      // Wrap in try-catch to handle any network errors gracefully
-      try {
-        // Use the promise-based API with proper error handling
-        const tagPromise = image.tag({ repo: baseRepoName, tag });
-        
-        // Add a timeout to prevent hanging
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Image tagging operation timed out')), 30000);
-        });
+      // Only attempt Docker tagging if image exists
+      // Docker tagging is optional - we primarily care about the database tag
+      if (imageExists) {
+        try {
+          // Use a prefixed repo name to avoid Docker interpreting it as a registry hostname
+          // Format: "local/teamname" instead of just "teamname"
+          const repoName = `local/${baseRepoName}`;
+          
+          // Tag the image with the new tag
+          // Use promise-based API with timeout
+          const tagPromise = image.tag({ repo: repoName, tag });
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Image tagging operation timed out')), 10000);
+          });
 
-        await Promise.race([tagPromise, timeoutPromise]);
-      } catch (tagError) {
-        // If tagging fails due to network/DNS issues, log but continue
-        // The database tag will still be updated to track the intended tag
-        const errorMessage = tagError instanceof Error ? tagError.message : 'Unknown tagging error';
-        console.warn(`Failed to tag Docker image for team ${team.id} (${team.name}):`, errorMessage);
-        
-        // Check if it's a DNS/network error - if so, we'll still update DB but log the error
-        if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
-          // This is a DNS/network error - likely Docker trying to resolve the repo name as a registry
-          // We'll still update the database tag, but log the error
-          console.warn(`DNS/Network error during tagging for team ${team.id}. Continuing with database update.`);
-        } else {
-          // For other errors, still log but continue
-          console.warn(`Tagging error for team ${team.id}:`, tagError);
+          await Promise.race([tagPromise, timeoutPromise]);
+          console.log(`Successfully tagged image for team ${team.id} as ${repoName}:${tag}`);
+        } catch (tagError) {
+          // If tagging fails, log but continue - database tag is what matters
+          const errorMessage = tagError instanceof Error ? tagError.message : 'Unknown tagging error';
+          
+          // Check if it's a DNS/network error
+          if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+            console.warn(`DNS/Network error during Docker tagging for team ${team.id} (${team.name}). This is non-critical - database tag will still be updated.`);
+          } else {
+            console.warn(`Docker tagging failed for team ${team.id} (${team.name}): ${errorMessage}. Continuing with database update.`);
+          }
+          // Don't throw - we'll still update the database tag
         }
       }
 
       // Update the project's tag field in the database
-      // The imageHash stays the same (tagging doesn't change the hash)
-      // We update this even if Docker tagging failed, to maintain consistency
+      // This is the primary operation - Docker tagging is secondary
       await prisma.project.update({
         where: { id: mostRecentProject.id },
         data: {
@@ -1052,9 +1056,12 @@ export const tagCourseOfferingProjects = async (
 
       tagged++;
     } catch (error) {
+      // Catch any other errors (like database errors)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error processing tag for team ${team.id}:`, errorMessage);
       errors.push({
         teamId: team.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       });
     }
   }
