@@ -109,6 +109,7 @@ model Project {
   ports                Json? // Store port mappings as JSON
   buildLogs            String? // Store build logs as text
   buildArgs            Json? // Store build arguments as JSON
+  envVars              Json? // Store environment variables as JSON
   dataFile             String? // Path to uploaded data file on host
   originalDataFileName String? // Original filename of the uploaded data file
   deployedAt           DateTime  @default(now())

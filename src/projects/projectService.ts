@@ -112,6 +112,7 @@ export const deploy = async (
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
   originalFileName?: string,
+  envVars?: Record<string, string>,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -292,6 +293,7 @@ export const deploy = async (
       const containerConfig: unknown = {
         Image: imageHash,
       name: normalizeContainerName(team.name),
+      Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
       HostConfig: {
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
@@ -709,6 +711,7 @@ export const buildWithStreaming = async (
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
   originalFileName?: string,
+  envVars?: Record<string, string>,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -757,6 +760,7 @@ export const buildWithStreaming = async (
       buildArgs: buildArgs || {},
       dataFile: dataFilePath || null,
       originalDataFileName: originalFileName || null,
+      envVars: envVars || {},
     },
   });
 
@@ -874,6 +878,7 @@ export const buildWithStreaming = async (
       const containerConfig: unknown = {
         Image: imageHash,
         name: normalizeContainerName(team.name),
+        Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
         HostConfig: {
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,
@@ -1226,6 +1231,7 @@ export const deployFromProject = async (
       originalDataFileName: sourceProject.originalDataFileName,
       buildLogs: sourceProject.buildLogs,
       deployedById,
+      envVars: sourceProject.envVars || {},
     },
   });
 
@@ -1290,9 +1296,11 @@ export const deployFromProject = async (
     await ensureProjectsNetwork();
 
     // Run the container with the same configuration
+    const envVars = (sourceProject.envVars as Record<string, string>) || {};
     const containerConfig: unknown = {
       Image: sourceProject.imageHash,
       name: containerName,
+      Env: Object.keys(envVars).length > 0 ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
       HostConfig: {
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,

@@ -26,12 +26,12 @@ export const getAllImages = async (_req: Request, res: Response) => {
 };
 
 export const deployProject = async (req: Request, res: Response) => {
-  const { teamId, githubUrl, buildArgs } = req.body;
+  const { teamId, githubUrl, buildArgs, envVars } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
 
-  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName);
+  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName, envVars);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -225,7 +225,7 @@ export const deployProjectWithStreamingController = async (
   req: Request,
   res: Response,
 ) => {
-  const { teamId, githubUrl, buildArgs } = req.body;
+  const { teamId, githubUrl, buildArgs, envVars } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
@@ -238,6 +238,7 @@ export const deployProjectWithStreamingController = async (
       buildArgs,
       dataFilePath,
       originalFileName,
+      envVars,
     );
 
     // Set headers for Server-Sent Events

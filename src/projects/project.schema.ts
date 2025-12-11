@@ -28,6 +28,14 @@ export const deployProjectSchema = z.object({
         return undefined;
       }
     }),
+    envVars: z.string().optional().transform((val) => {
+      if (!val) return undefined;
+      try {
+        return JSON.parse(val);
+      } catch {
+        return undefined;
+      }
+    }),
   }),
 });
 
