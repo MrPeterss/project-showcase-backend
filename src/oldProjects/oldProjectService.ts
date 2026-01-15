@@ -109,6 +109,8 @@ export const buildOldJson = async (
             data: {
               status: 'stopped',
               stoppedAt: new Date(),
+              failedCheckCount: 0,
+              lastCheckedAt: null,
             },
           });
         } catch {
@@ -332,6 +334,8 @@ export const buildOldSql = async (
             data: {
               status: 'stopped',
               stoppedAt: new Date(),
+              failedCheckCount: 0,
+              lastCheckedAt: null,
             },
           });
         } catch {

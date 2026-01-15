@@ -6,12 +6,13 @@ import { prisma } from '../prisma.js';
 
 /**
  * Check the status of a container and update project status if needed
+ * Returns true if the container is running, false otherwise
  */
 const checkContainerStatus = async (project: {
   id: number;
   containerId: string | null;
   containerName: string | null;
-}) => {
+}): Promise<boolean> => {
   if (!project.containerId) {
     // No container ID, mark as stopped
     await prisma.project.update({
@@ -19,9 +20,10 @@ const checkContainerStatus = async (project: {
       data: {
         status: 'stopped',
         stoppedAt: new Date(),
+        lastCheckedAt: new Date(),
       },
     });
-    return;
+    return false;
   }
 
   try {
@@ -38,9 +40,12 @@ const checkContainerStatus = async (project: {
         data: {
           status: 'stopped',
           stoppedAt: new Date(),
+          lastCheckedAt: new Date(),
         },
       });
     }
+    
+    return isRunning;
   } catch (error) {
     // Container doesn't exist or can't be accessed
     if ((error as { statusCode?: number }).statusCode === 404) {
@@ -50,6 +55,7 @@ const checkContainerStatus = async (project: {
         data: {
           status: 'stopped',
           stoppedAt: new Date(),
+          lastCheckedAt: new Date(),
         },
       });
     } else {
@@ -59,6 +65,116 @@ const checkContainerStatus = async (project: {
         error instanceof Error ? error.message : 'Unknown error',
       );
     }
+    return false;
+  }
+};
+
+/**
+ * Calculate backoff delay in milliseconds based on failed check count
+ * - 0 checks: 30 seconds (first check after stopping)
+ * - 1 check: 1 minute
+ * - 2 checks: 2 minutes
+ * - 3 checks: 5 minutes
+ * - 4+ checks: 15 minutes
+ */
+const getBackoffDelay = (failedCheckCount: number): number => {
+  switch (failedCheckCount) {
+    case 0:
+      return 30 * 1000; // 30 seconds
+    case 1:
+      return 60 * 1000; // 1 minute
+    case 2:
+      return 2 * 60 * 1000; // 2 minutes
+    case 3:
+      return 5 * 60 * 1000; // 5 minutes
+    default:
+      return 15 * 60 * 1000; // 15 minutes
+  }
+};
+
+/**
+ * Check if a stopped project should be checked again based on backoff
+ */
+const shouldCheckStoppedProject = (
+  lastCheckedAt: Date | null,
+  failedCheckCount: number,
+): boolean => {
+  if (!lastCheckedAt) {
+    // Never checked, should check now
+    return true;
+  }
+
+  const backoffDelay = getBackoffDelay(failedCheckCount);
+  const timeSinceLastCheck = Date.now() - lastCheckedAt.getTime();
+  
+  return timeSinceLastCheck >= backoffDelay;
+};
+
+/**
+ * Check stopped projects to see if they've come back online
+ * Uses exponential backoff to avoid excessive checking
+ */
+const checkStoppedProjects = async () => {
+  try {
+    // Get all stopped projects
+    const stoppedProjects = await prisma.project.findMany({
+      where: {
+        status: 'stopped',
+      },
+      select: {
+        id: true,
+        containerId: true,
+        containerName: true,
+        lastCheckedAt: true,
+        failedCheckCount: true,
+      },
+    });
+
+    // Filter projects that should be checked based on backoff
+    const projectsToCheck = stoppedProjects.filter((project) =>
+      shouldCheckStoppedProject(project.lastCheckedAt, project.failedCheckCount),
+    );
+
+    if (projectsToCheck.length > 0) {
+      console.log(`Checking ${projectsToCheck.length} stopped projects`);
+    }
+
+    // Check each project's container
+    for (const project of projectsToCheck) {
+      try {
+        const isRunning = await checkContainerStatus(project);
+        
+        if (isRunning) {
+          // Project is back online! Update status and reset backoff
+          await prisma.project.update({
+            where: { id: project.id },
+            data: {
+              status: 'running',
+              stoppedAt: null,
+              failedCheckCount: 0,
+              lastCheckedAt: new Date(),
+            },
+          });
+          console.log(`Project ${project.id} is back online!`);
+        } else {
+          // Still stopped, increment failed check count for backoff
+          await prisma.project.update({
+            where: { id: project.id },
+            data: {
+              failedCheckCount: { increment: 1 },
+              lastCheckedAt: new Date(),
+            },
+          });
+        }
+      } catch (error) {
+        console.error(
+          `Error checking stopped project ${project.id}:`,
+          error instanceof Error ? error.message : 'Unknown error',
+        );
+      }
+    }
+  } catch (error) {
+    console.error('Error in stopped projects check:', error);
   }
 };
 
@@ -88,11 +204,22 @@ const checkRunningProjects = async () => {
   }
 };
 
+/**
+ * Main monitoring function that checks both running and stopped projects
+ */
+const monitorAllProjects = async () => {
+  await Promise.all([
+    checkRunningProjects(),
+    checkStoppedProjects(),
+  ]);
+};
+
 let monitorTask: cron.ScheduledTask | null = null;
 
 /**
  * Start the container monitoring cron job
  * Runs every 30 seconds
+ * Checks running projects and stopped projects (with exponential backoff)
  */
 export const startContainerMonitor = () => {
   // Cron expression: every 30 seconds
@@ -100,7 +227,7 @@ export const startContainerMonitor = () => {
   // "*/30 * * * * *" means every 30 seconds
   const cronExpression = '*/30 * * * * *';
 
-  monitorTask = cron.schedule(cronExpression, checkRunningProjects);
+  monitorTask = cron.schedule(cronExpression, monitorAllProjects);
 
   monitorTask.start();
   console.log('Container monitoring cron job started (every 30 seconds)');

@@ -228,6 +228,7 @@ export const migrateProjectContainer = async (
   if (existingProject) {
     // If project exists for the same team, just update it
     if (existingProject.teamId === team.id) {
+      const isRunning = updatedContainerInfo.State.Running;
       const updatedProject = await prisma.project.update({
         where: { id: existingProject.id },
         data: {
@@ -235,8 +236,13 @@ export const migrateProjectContainer = async (
           ports: ports as any,
           imageHash: imageHash || existingProject.imageHash,
           githubUrl: githubUrl || existingProject.githubUrl,
-          status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
+          status: isRunning ? 'running' : 'stopped',
           deployedAt: existingProject.deployedAt,
+          ...(isRunning ? {} : { 
+            stoppedAt: new Date(),
+            failedCheckCount: 0,
+            lastCheckedAt: null,
+          }),
         },
         include: {
           team: true,
@@ -254,6 +260,7 @@ export const migrateProjectContainer = async (
       };
     } else {
       // Project exists but is associated with a different team - move it to the new team
+      const isRunning = updatedContainerInfo.State.Running;
       const movedProject = await prisma.project.update({
         where: { id: existingProject.id },
         data: {
@@ -262,9 +269,14 @@ export const migrateProjectContainer = async (
           ports: ports as any,
           imageHash: imageHash || existingProject.imageHash,
           githubUrl: githubUrl || existingProject.githubUrl,
-          status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
+          status: isRunning ? 'running' : 'stopped',
           deployedAt: existingProject.deployedAt,
           deployedById: deployedById || existingProject.deployedById,
+          ...(isRunning ? {} : { 
+            stoppedAt: new Date(),
+            failedCheckCount: 0,
+            lastCheckedAt: null,
+          }),
         },
         include: {
           team: true,
@@ -284,6 +296,7 @@ export const migrateProjectContainer = async (
   }
   
   // Create new project entry
+  const isRunning = updatedContainerInfo.State.Running;
   const project = await prisma.project.create({
     data: {
       teamId: team.id,
@@ -291,11 +304,16 @@ export const migrateProjectContainer = async (
       imageHash,
       containerId: container.id,
       containerName: updatedContainerInfo.Name,
-      status: updatedContainerInfo.State.Running ? 'running' : 'stopped',
+      status: isRunning ? 'running' : 'stopped',
       ports: ports as any,
       buildArgs: {},
       deployedById: deployedById || null,
       deployedAt: containerCreatedAt,
+      ...(isRunning ? {} : { 
+        stoppedAt: new Date(),
+        failedCheckCount: 0,
+        lastCheckedAt: null,
+      }),
     },
     include: {
       team: true,

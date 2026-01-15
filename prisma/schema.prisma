@@ -114,6 +114,8 @@ model Project {
   originalDataFileName String? // Original filename of the uploaded data file
   deployedAt           DateTime  @default(now())
   stoppedAt            DateTime?
+  lastCheckedAt        DateTime? // Last time we checked if a stopped project is back online
+  failedCheckCount     Int       @default(0) // Number of consecutive failed checks for backoff
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

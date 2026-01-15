@@ -189,6 +189,8 @@ export const deploy = async (
             data: {
               status: 'stopped',
               stoppedAt: new Date(),
+              failedCheckCount: 0,
+              lastCheckedAt: null,
             },
           });
           console.log(`Stopped running container for project ${runningProject.id}`);
@@ -538,6 +540,8 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
       data: {
         status: 'stopped',
         stoppedAt: new Date(),
+        failedCheckCount: 0,
+        lastCheckedAt: null,
       },
       include: {
         team: true,
@@ -555,6 +559,8 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
         data: {
           status: 'stopped',
           stoppedAt: new Date(),
+          failedCheckCount: 0,
+          lastCheckedAt: null,
         },
         include: {
           team: true,
@@ -792,6 +798,8 @@ export const buildWithStreaming = async (
               data: {
                 status: 'stopped',
                 stoppedAt: new Date(),
+                failedCheckCount: 0,
+                lastCheckedAt: null,
               },
             });
           } catch (error) {
@@ -1240,6 +1248,8 @@ export const deployFromProject = async (
             data: {
               status: 'stopped',
               stoppedAt: new Date(),
+              failedCheckCount: 0,
+              lastCheckedAt: null,
             },
           });
           console.log(`Stopped running container for project ${runningProject.id}`);
