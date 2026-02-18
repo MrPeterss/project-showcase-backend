@@ -8,11 +8,19 @@ import { ValidationError } from '../utils/AppError.js';
 export const validateRequest =
   (schema: ZodObject) => (req: Request, _res: Response, next: NextFunction) => {
     try {
-      schema.parse({
+      const validated = schema.parse({
         body: req.body,
         query: req.query,
         params: req.params,
       });
+      
+      // Update req with validated/transformed values
+      req.body = validated.body;
+      req.query = validated.query;
+      req.params = validated.params;
+      
+      console.log('[DEBUG MIDDLEWARE] Validated body:', req.body);
+      
       // If validation is successful, continue
       next();
     } catch (err) {

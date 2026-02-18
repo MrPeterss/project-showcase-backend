@@ -226,6 +226,8 @@ export const deployProjectWithStreamingController = async (
   res: Response,
 ) => {
   const { teamId, githubUrl, buildArgs, envVars } = req.body;
+  console.log('[DEBUG] Controller received envVars:', envVars);
+  console.log('[DEBUG] Controller received envVars type:', typeof envVars);
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;

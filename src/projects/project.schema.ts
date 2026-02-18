@@ -28,12 +28,30 @@ export const deployProjectSchema = z.object({
         return undefined;
       }
     }),
-    envVars: z.string().optional().transform((val) => {
+    envVars: z.string().optional().transform((val, ctx) => {
       if (!val) return undefined;
       try {
-        return JSON.parse(val);
-      } catch {
-        return undefined;
+        const parsed = JSON.parse(val);
+        console.log('[DEBUG SCHEMA] Parsed envVars:', parsed);
+        console.log('[DEBUG SCHEMA] Parsed envVars type:', typeof parsed);
+        
+        // Validate it's an object
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'envVars must be a JSON object',
+          });
+          return z.NEVER;
+        }
+        
+        return parsed;
+      } catch (error) {
+        console.error('[DEBUG SCHEMA] Failed to parse envVars:', error);
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'envVars must be valid JSON',
+        });
+        return z.NEVER;
       }
     }),
   }),
