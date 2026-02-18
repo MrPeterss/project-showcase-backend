@@ -292,14 +292,10 @@ export const deploy = async (
 
       // Run the container with appropriate startup command
       // Use imageHash directly - Docker accepts image IDs
-      console.log('[DEBUG] envVars received:', envVars);
-      const envArray = envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : [];
-      console.log('[DEBUG] Env array for Docker:', envArray);
-      
       const containerConfig: unknown = {
         Image: imageHash,
       name: normalizeContainerName(team.name),
-      Env: envArray.length > 0 ? envArray : undefined,
+      Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
       HostConfig: {
         AutoRemove: false,
         NetworkMode: PROJECTS_NETWORK,
@@ -887,14 +883,10 @@ export const buildWithStreaming = async (
 
       // Run the container
       // Use imageHash directly - Docker accepts image IDs
-      console.log('[DEBUG] envVars received in buildWithStreaming:', envVars);
-      const envArray = envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : [];
-      console.log('[DEBUG] Env array for Docker in buildWithStreaming:', envArray);
-      
       const containerConfig: unknown = {
         Image: imageHash,
         name: normalizeContainerName(team.name),
-        Env: envArray.length > 0 ? envArray : undefined,
+        Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
         HostConfig: {
           AutoRemove: false,
           NetworkMode: PROJECTS_NETWORK,

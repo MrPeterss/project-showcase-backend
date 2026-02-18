@@ -32,8 +32,6 @@ export const deployProjectSchema = z.object({
       if (!val) return undefined;
       try {
         const parsed = JSON.parse(val);
-        console.log('[DEBUG SCHEMA] Parsed envVars:', parsed);
-        console.log('[DEBUG SCHEMA] Parsed envVars type:', typeof parsed);
         
         // Validate it's an object
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -46,7 +44,6 @@ export const deployProjectSchema = z.object({
         
         return parsed;
       } catch (error) {
-        console.error('[DEBUG SCHEMA] Failed to parse envVars:', error);
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'envVars must be valid JSON',
