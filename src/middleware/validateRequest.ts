@@ -14,13 +14,12 @@ export const validateRequest =
         params: req.params,
       });
       
-      // Update req with validated/transformed values
+      // Update req with validated/transformed values and cast for linting purposes
       req.body = validated.body;
-      req.query = validated.query;
-      req.params = validated.params;
-      
+      req.query = validated.query as typeof req.query;
+      req.params = validated.params as typeof req.params;
+
       console.log('[DEBUG MIDDLEWARE] Validated body:', req.body);
-      
       // If validation is successful, continue
       next();
     } catch (err) {
