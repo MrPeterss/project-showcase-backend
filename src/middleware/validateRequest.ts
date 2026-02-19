@@ -14,15 +14,8 @@ export const validateRequest =
         params: req.params,
       });
       
-      // Update req with validated/transformed values if they exist
       if (validated.body !== undefined) {
         req.body = validated.body;
-      }
-      if (validated.params !== undefined) {
-        req.params = validated.params as any;
-      }
-      if (validated.query !== undefined) {
-        req.query = validated.query as any;
       }
       
       // If validation is successful, continue
