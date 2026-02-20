@@ -1,95 +1,22 @@
 import type { Request, Response } from 'express';
 
-import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
-import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import {
-  ConflictError,
+  checkCourseOfferingAccess,
+  checkInstructorAccess,
+} from '../utils/authorizationHelpers.js';
+import {
   ForbiddenError,
   NotFoundError,
 } from '../utils/AppError.js';
-
-// Helper function to get enrollment with highest access level
-// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
-const getHighestAccessEnrollment = async (
-  userId: number,
-  offeringId: number,
-) => {
-  const enrollments = await prisma.courseOfferingEnrollment.findMany({
-    where: {
-      userId,
-      courseOfferingId: offeringId,
-    },
-  });
-
-  if (enrollments.length === 0) {
-    return null;
-  }
-
-  // If multiple enrollments exist, return the one with highest access level
-  const rolePriority: Record<string, number> = {
-    INSTRUCTOR: 3,
-    STUDENT: 2,
-    VIEWER: 1,
-  };
-
-  return enrollments.reduce((highest, current) => {
-    return rolePriority[current.role] > rolePriority[highest.role]
-      ? current
-      : highest;
-  });
-};
-
-// Helper function to check if user has access to course offering
-const checkCourseOfferingAccess = async (
-  userId: number,
-  offeringId: number,
-  requiredRoles?: string[],
-) => {
-  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
-
-  if (!enrollment) {
-    return null;
-  }
-
-  if (requiredRoles && !requiredRoles.includes(enrollment.role)) {
-    return null;
-  }
-
-  return enrollment;
-};
-
-// Helper function to check if user is instructor of course offering
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  return await checkCourseOfferingAccess(userId, offeringId, [
-    COURSE_OFFERING_ROLES.INSTRUCTOR,
-  ]);
-};
-
-// Helper function to check if a team name already exists (case-insensitive)
-const checkTeamNameExists = async (
-  teamName: string,
-  excludeTeamId?: number,
-): Promise<boolean> => {
-  const allTeams = await prisma.team.findMany({
-    select: {
-      id: true,
-      name: true,
-    },
-  });
-
-  // Check for case-insensitive match
-  const normalizedName = teamName.toLowerCase().trim();
-  
-  return allTeams.some((team) => {
-    // Skip the team we're updating (if excludeTeamId is provided)
-    if (excludeTeamId && team.id === excludeTeamId) {
-      return false;
-    }
-    return team.name.toLowerCase().trim() === normalizedName;
-  });
-};
+import {
+  createTeamWithMembers,
+  updateTeamWithMembers,
+  deleteTeamWithCleanup,
+  addMembersToTeam,
+  removeMemberFromTeam,
+} from './teamService.js';
 
 // Helper function to get the appropriate project for a team
 // Returns the newest running project if available, otherwise the newest project regardless of status
@@ -254,65 +181,8 @@ export const createTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Check if team name already exists (case-insensitive)
-  const teamNameExists = await checkTeamNameExists(name);
-  
-  if (teamNameExists) {
-    throw new ConflictError('Team name already exists');
-  }
-
-  // Process member emails - create users if they don't exist and enroll them
-  const memberUserIds = [];
-  for (const email of memberEmails) {
-    // Find or create user
-    let user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: { email },
-      });
-    }
-
-    // Check if user is enrolled in course offering
-    let enrollment = await getHighestAccessEnrollment(user.id, offeringId);
-
-    // If not enrolled, enroll as STUDENT
-    if (!enrollment) {
-      enrollment = await prisma.courseOfferingEnrollment.create({
-        data: {
-          userId: user.id,
-          courseOfferingId: offeringId,
-          role: COURSE_OFFERING_ROLES.STUDENT,
-        },
-      });
-    }
-
-    memberUserIds.push(user.id);
-  }
-
-  // Create team
-  const team = await prisma.team.create({
-    data: {
-      name,
-      courseOfferingId: offeringId,
-      members: {
-        create: memberUserIds.map((userId) => ({
-          userId,
-        })),
-      },
-    },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: { id: true, email: true },
-          },
-        },
-      },
-    },
-  });
+  // Create team using service (handles name validation, user creation, enrollment)
+  const team = await createTeamWithMembers(name, offeringId, memberEmails);
 
   return res.status(201).json(team);
 };
@@ -325,9 +195,6 @@ export const updateTeam = async (req: Request, res: Response) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: {
-      members: true,
-    },
   });
 
   if (!team) {
@@ -345,73 +212,8 @@ export const updateTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Check if new team name conflicts (case-insensitive, if name is being changed)
-  if (name && name.toLowerCase().trim() !== team.name.toLowerCase().trim()) {
-    const teamNameExists = await checkTeamNameExists(name, teamId);
-    
-    if (teamNameExists) {
-      throw new ConflictError('Team name already exists');
-    }
-  }
-
-  // Process member emails if provided
-  let memberUserIds: number[] | undefined;
-  if (memberEmails) {
-    memberUserIds = [];
-    for (const email of memberEmails) {
-      // Find or create user
-      let user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        user = await prisma.user.create({
-          data: { email },
-        });
-      }
-
-      // Check if user is enrolled in course offering
-      let enrollment = await getHighestAccessEnrollment(user.id, team.courseOfferingId);
-
-      // If not enrolled, enroll as STUDENT
-      if (!enrollment) {
-        enrollment = await prisma.courseOfferingEnrollment.create({
-          data: {
-            userId: user.id,
-            courseOfferingId: team.courseOfferingId,
-            role: COURSE_OFFERING_ROLES.STUDENT,
-          },
-        });
-      }
-
-      memberUserIds.push(user.id);
-    }
-  }
-
-  // Update team
-  const updatedTeam = await prisma.team.update({
-    where: { id: teamId },
-    data: {
-      ...(name && { name }),
-      ...(memberUserIds && {
-        members: {
-          deleteMany: {},
-          create: memberUserIds.map((userId) => ({
-            userId,
-          })),
-        },
-      }),
-    },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: { id: true, email: true },
-          },
-        },
-      },
-    },
-  });
+  // Update team using service (handles name validation, user creation, enrollment)
+  const updatedTeam = await updateTeamWithMembers(teamId, name, memberEmails);
 
   return res.json(updatedTeam);
 };
@@ -423,9 +225,6 @@ export const deleteTeam = async (req: Request, res: Response) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: {
-      projects: true,
-    },
   });
 
   if (!team) {
@@ -443,44 +242,8 @@ export const deleteTeam = async (req: Request, res: Response) => {
     }
   }
 
-  // Stop and remove Docker containers for all projects
-  for (const project of team.projects) {
-    if (project.containerId) {
-      try {
-        const container = docker.getContainer(project.containerId);
-        try {
-          await container.stop();
-        } catch (stopError) {
-          // Container might already be stopped, continue
-          console.log(`Failed to stop container ${project.containerId}:`, stopError);
-        }
-        try {
-          await container.remove();
-        } catch (removeError) {
-          // Container might already be removed, continue
-          console.log(`Failed to remove container ${project.containerId}:`, removeError);
-        }
-      } catch (error) {
-        // Container might not exist, continue with deletion
-        console.log(`Container ${project.containerId} not found, continuing deletion`);
-      }
-    }
-  }
-
-  // Delete all projects for this team
-  await prisma.project.deleteMany({
-    where: { teamId },
-  });
-
-  // Delete all team memberships for this team
-  await prisma.teamMembership.deleteMany({
-    where: { teamId },
-  });
-
-  // Finally, delete the team
-  await prisma.team.delete({
-    where: { id: teamId },
-  });
+  // Delete team using service (handles container cleanup, project deletion, etc.)
+  await deleteTeamWithCleanup(teamId);
 
   return res.status(204).send();
 };
@@ -493,13 +256,6 @@ export const addTeamMembers = async (req: Request, res: Response) => {
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    include: {
-      members: {
-        include: {
-          user: true,
-        },
-      },
-    },
   });
 
   if (!team) {
@@ -517,70 +273,8 @@ export const addTeamMembers = async (req: Request, res: Response) => {
     }
   }
 
-  // Process member emails
-  const newMemberUserIds = [];
-  const existingMemberEmails = team.members.map((member) => member.user.email);
-
-  for (const email of memberEmails) {
-    // Check if user is already a member
-    if (existingMemberEmails.includes(email)) {
-      throw new ConflictError(`User ${email} is already a member of this team`);
-    }
-
-    // Find or create user
-    let user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: { email },
-      });
-    }
-
-    // Check if user is enrolled in course offering
-    let enrollment = await prisma.courseOfferingEnrollment.findFirst({
-      where: {
-        userId: user.id,
-        courseOfferingId: team.courseOfferingId,
-      },
-    });
-
-    // If not enrolled, enroll as STUDENT
-    if (!enrollment) {
-      enrollment = await prisma.courseOfferingEnrollment.create({
-        data: {
-          userId: user.id,
-          courseOfferingId: team.courseOfferingId,
-          role: COURSE_OFFERING_ROLES.STUDENT,
-        },
-      });
-    }
-
-    newMemberUserIds.push(user.id);
-  }
-
-  // Add new members to team
-  await prisma.teamMembership.createMany({
-    data: newMemberUserIds.map((userId) => ({
-      userId,
-      teamId,
-    })),
-  });
-
-  // Return updated team
-  const updatedTeam = await prisma.team.findUnique({
-    where: { id: teamId },
-    include: {
-      members: {
-        include: {
-          user: {
-            select: { id: true, email: true },
-          },
-        },
-      },
-    },
-  });
+  // Add members using service (handles user creation, enrollment, duplicate checking)
+  const updatedTeam = await addMembersToTeam(teamId, memberEmails);
 
   return res.json(updatedTeam);
 };
@@ -624,14 +318,8 @@ export const removeTeamMember = async (req: Request, res: Response) => {
     throw new NotFoundError('User is not a member of this team');
   }
 
-  await prisma.teamMembership.delete({
-    where: {
-      userId_teamId: {
-        userId: targetUserId,
-        teamId,
-      },
-    },
-  });
+  // Remove member using service
+  await removeMemberFromTeam(teamId, targetUserId);
 
   return res.status(204).send();
 };

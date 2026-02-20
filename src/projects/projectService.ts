@@ -8,6 +8,12 @@ import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 
+// Re-export tag services for backwards compatibility
+export {
+  tagCourseOfferingProjects,
+  removeTagFromCourseOfferingProjects,
+} from './projectTagService.js';
+
 const PROJECTS_NETWORK = 'projects_network';
 const DATA_MOUNT_PATH = '/var/www';
 
@@ -959,6 +965,12 @@ export const buildWithStreaming = async (
  * Tags the newest running project if available, otherwise the most recent project regardless of status.
  * Updates the project's tag field in the database and adds tag to course offering settings.
  */
+/**
+ * Tag all projects in a course offering.
+ * MOVED TO: projectTagService.ts
+ * This is kept here temporarily for reference but is commented out.
+ */
+/*
 export const tagCourseOfferingProjects = async (
   courseOfferingId: number,
   tag: string,
@@ -1052,12 +1064,14 @@ export const tagCourseOfferingProjects = async (
 
   return { tagged, skipped, errors };
 };
+*/
 
 /**
  * Remove a tag from all projects in a course offering.
- * Sets the project's tag field to null for any projects that have the tag.
- * Always removes tag from course offering settings, even if no projects have it.
+ * MOVED TO: projectTagService.ts
+ * This is kept here temporarily for reference but is commented out.
  */
+/*
 export const removeTagFromCourseOfferingProjects = async (
   courseOfferingId: number,
   tag: string,
@@ -1144,6 +1158,7 @@ export const removeTagFromCourseOfferingProjects = async (
 
   return { untagged, errors };
 };
+*/
 
 /**
  * Deploy a project using an existing project entry's configuration.

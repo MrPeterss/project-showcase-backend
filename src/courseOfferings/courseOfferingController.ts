@@ -13,64 +13,16 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../utils/AppError.js';
+import {
+  checkCourseOfferingAccess,
+  checkInstructorAccess,
+} from '../utils/authorizationHelpers.js';
+import {
+  deleteCourseOfferingWithCleanup,
+  lockCourseOfferingServer as lockCourseOfferingServerService,
+  unlockCourseOfferingServer as unlockCourseOfferingServerService,
+} from './courseOfferingService.js';
 import { processCourseOfferingSettings } from './courseOfferingSettings.js';
-
-// Helper function to get enrollment with highest access level
-// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
-const getHighestAccessEnrollment = async (
-  userId: number,
-  offeringId: number,
-) => {
-  const enrollments = await prisma.courseOfferingEnrollment.findMany({
-    where: {
-      userId,
-      courseOfferingId: offeringId,
-    },
-  });
-
-  if (enrollments.length === 0) {
-    return null;
-  }
-
-  // If multiple enrollments exist, return the one with highest access level
-  const rolePriority: Record<CourseOfferingRole, number> = {
-    INSTRUCTOR: 3,
-    STUDENT: 2,
-    VIEWER: 1,
-  };
-
-  return enrollments.reduce((highest, current) => {
-    return rolePriority[current.role] > rolePriority[highest.role]
-      ? current
-      : highest;
-  });
-};
-
-// Helper function to check if user has access to course offering
-const checkCourseOfferingAccess = async (
-  userId: number,
-  offeringId: number,
-  requiredRoles?: CourseOfferingRole[],
-) => {
-  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
-
-  if (!enrollment) {
-    return null;
-  }
-
-  if (requiredRoles && !requiredRoles.includes(enrollment.role)) {
-    return null;
-  }
-
-  return enrollment;
-};
-
-// Helper function to check if user is instructor of course offering
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  return await checkCourseOfferingAccess(userId, offeringId, [
-    COURSE_OFFERING_ROLES.INSTRUCTOR,
-  ]);
-};
 
 // GET /course-offerings
 export const getAllCourseOfferings = async (req: Request, res: Response) => {
@@ -313,41 +265,14 @@ export const deleteCourseOffering = async (req: Request, res: Response) => {
 
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: offeringId },
-    include: {
-      enrollments: true,
-      teams: {
-        include: {
-          members: true,
-        },
-      },
-    },
   });
 
   if (!courseOffering) {
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check if course offering has any enrollments or teams
-  const hasEnrollments = courseOffering.enrollments.length > 0;
-  const hasTeams = courseOffering.teams.length > 0;
-
-  if (hasEnrollments || hasTeams) {
-    const issues = [];
-    if (hasEnrollments) {
-      issues.push(`${courseOffering.enrollments.length} enrollment(s)`);
-    }
-    if (hasTeams) {
-      issues.push(`${courseOffering.teams.length} team(s)`);
-    }
-
-    throw new ConflictError(
-      `Cannot delete course offering. It has ${issues.join(' and ')} associated with it. Please remove all enrollments and teams first.`,
-    );
-  }
-
-  await prisma.courseOffering.delete({
-    where: { id: offeringId },
-  });
+  // Delete using service (handles all cleanup)
+  await deleteCourseOfferingWithCleanup(offeringId);
 
   return res.status(204).send();
 };
@@ -375,20 +300,8 @@ export const lockCourseOfferingServer = async (req: Request, res: Response) => {
     }
   }
 
-  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
-  const newSettings = {
-    ...oldSettings,
-    serverLocked: true,
-  };
-
-  const updatedOffering = await prisma.courseOffering.update({
-    where: { id: offeringId },
-    data: { settings: newSettings },
-    include: {
-      course: true,
-      semester: true,
-    },
-  });
+  // Lock using service
+  const updatedOffering = await lockCourseOfferingServerService(offeringId);
 
   return res.json({
     message: 'Course offering server locked successfully',
@@ -419,20 +332,8 @@ export const unlockCourseOfferingServer = async (req: Request, res: Response) =>
     }
   }
 
-  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
-  const newSettings = {
-    ...oldSettings,
-    serverLocked: false,
-  };
-
-  const updatedOffering = await prisma.courseOffering.update({
-    where: { id: offeringId },
-    data: { settings: newSettings },
-    include: {
-      course: true,
-      semester: true,
-    },
-  });
+  // Unlock using service
+  const updatedOffering = await unlockCourseOfferingServerService(offeringId);
 
   return res.json({
     message: 'Course offering server unlocked successfully',

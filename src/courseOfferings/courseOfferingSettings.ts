@@ -1,48 +1,12 @@
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
 import { ForbiddenError, NotFoundError } from '../utils/AppError.js';
+import { checkInstructorAccess } from '../utils/authorizationHelpers.js';
 
 // Enum for processable course offering settings keys
 export enum CourseOfferingSettingKey {
   COURSE_VISIBILITY = 'course_visibility',
 }
-
-// Helper function to get enrollment with highest access level
-// Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
-const getHighestAccessEnrollment = async (
-  userId: number,
-  offeringId: number,
-) => {
-  const enrollments = await prisma.courseOfferingEnrollment.findMany({
-    where: {
-      userId,
-      courseOfferingId: offeringId,
-    },
-  });
-
-  if (enrollments.length === 0) {
-    return null;
-  }
-
-  // If multiple enrollments exist, return the one with highest access level
-  const rolePriority: Record<string, number> = {
-    INSTRUCTOR: 3,
-    STUDENT: 2,
-    VIEWER: 1,
-  };
-
-  return enrollments.reduce((highest, current) => {
-    return rolePriority[current.role] > rolePriority[highest.role]
-      ? current
-      : highest;
-  });
-};
-
-// Helper function to check if user is instructor of course offering
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
-  return enrollment && enrollment.role === COURSE_OFFERING_ROLES.INSTRUCTOR;
-};
 
 /**
  * Processes course_visibility setting changes
