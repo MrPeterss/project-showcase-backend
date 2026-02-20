@@ -6,7 +6,6 @@ import { docker } from '../docker.js';
 import { git } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
-import { getTeamPreferredProject } from '../utils/projectUtils.js';
 
 // Re-export tag services for backwards compatibility
 export {
