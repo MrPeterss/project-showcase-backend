@@ -11,6 +11,7 @@ export const updateTeamSchema = z.object({
   body: z.object({
     name: z.string().min(1).max(100).optional(),
     memberEmails: z.array(z.string().email()).optional(),
+    hallOfFame: z.boolean().optional(),
   }),
 });
 

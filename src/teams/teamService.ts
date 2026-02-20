@@ -132,12 +132,14 @@ export const createTeamWithMembers = async (
  * @param teamId - The ID of the team to update
  * @param name - Optional new team name
  * @param memberEmails - Optional new list of member emails (replaces existing members)
+ * @param hallOfFame - Optional hall of fame status
  * @returns The updated team
  */
 export const updateTeamWithMembers = async (
   teamId: number,
   name?: string,
   memberEmails?: string[],
+  hallOfFame?: boolean,
 ) => {
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -168,6 +170,7 @@ export const updateTeamWithMembers = async (
     where: { id: teamId },
     data: {
       ...(name && { name }),
+      ...(hallOfFame !== undefined && { hallOfFame }),
       ...(memberUserIds && {
         members: {
           deleteMany: {},

@@ -191,7 +191,7 @@ export const createTeam = async (req: Request, res: Response) => {
 export const updateTeam = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
   const teamId = parseInt(req.params.teamId, 10);
-  const { name, memberEmails } = req.body;
+  const { name, memberEmails, hallOfFame } = req.body;
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -213,7 +213,7 @@ export const updateTeam = async (req: Request, res: Response) => {
   }
 
   // Update team using service (handles name validation, user creation, enrollment)
-  const updatedTeam = await updateTeamWithMembers(teamId, name, memberEmails);
+  const updatedTeam = await updateTeamWithMembers(teamId, name, memberEmails, hallOfFame);
 
   return res.json(updatedTeam);
 };

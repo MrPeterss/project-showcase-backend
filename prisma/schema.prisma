@@ -66,9 +66,10 @@ model CourseOffering {
 }
 
 model Team {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  hallOfFame   Boolean  @default(false)
+  createdAt    DateTime @default(now())
 
   CourseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])
   courseOfferingId Int

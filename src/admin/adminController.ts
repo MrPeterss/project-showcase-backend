@@ -151,6 +151,7 @@ export const getAllProjects = async (_req: Request, res: Response) => {
       team: {
         id: number;
         name: string;
+        hallOfFame: boolean;
         courseOffering: {
           id: number;
           course: {
@@ -196,6 +197,7 @@ export const getAllProjects = async (_req: Request, res: Response) => {
           team: {
             id: project.team.id,
             name: project.team.name,
+            hallOfFame: project.team.hallOfFame,
             courseOffering: {
               id: project.team.CourseOffering.id,
               course: {

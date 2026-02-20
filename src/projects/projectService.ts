@@ -384,6 +384,7 @@ export const getTeamProjects = async (teamId: number) => {
         select: {
           id: true,
           name: true,
+          hallOfFame: true,
         },
       },
       deployedBy: {
@@ -410,6 +411,7 @@ export const getProjectById = async (projectId: number) => {
         select: {
           id: true,
           name: true,
+          hallOfFame: true,
         },
       },
       deployedBy: {
@@ -588,6 +590,7 @@ export const getAllProjects = async () => {
         select: {
           id: true,
           name: true,
+          hallOfFame: true,
         },
       },
       deployedBy: {
