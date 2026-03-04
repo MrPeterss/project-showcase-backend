@@ -76,10 +76,22 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
     teams.map(async (team) => {
       const project = await getTeamPreferredProject(team.id, {
         deployedAt: true,
+        status: true,
+        githubUrl: true,
+        containerName: true,
       });
       return {
         ...team,
-        projects: project ? [{ deployedAt: project.deployedAt }] : [],
+        projects: project
+          ? [
+              {
+                deployedAt: project.deployedAt,
+                status: project.status,
+                githubUrl: project.githubUrl,
+                containerName: project.containerName,
+              },
+            ]
+          : [],
       };
     }),
   );
