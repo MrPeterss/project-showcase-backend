@@ -28,7 +28,7 @@ export const deployProjectSchema = z.object({
         return undefined;
       }
     }),
-    envVars: z.string().optional().transform((val, ctx) => {
+    extraEnvVars: z.string().optional().transform((val, ctx) => {
       if (!val) return undefined;
       try {
         const parsed = JSON.parse(val);
@@ -37,7 +37,7 @@ export const deployProjectSchema = z.object({
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'envVars must be a JSON object',
+            message: 'extraEnvVars must be a JSON object',
           });
           return z.NEVER;
         }
@@ -46,7 +46,7 @@ export const deployProjectSchema = z.object({
       } catch (error) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'envVars must be valid JSON',
+          message: 'extraEnvVars must be valid JSON',
         });
         return z.NEVER;
       }

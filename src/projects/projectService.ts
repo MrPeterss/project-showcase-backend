@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { EnvironmentScope } from '@prisma/client';
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { docker } from '../docker.js';
 import { git } from '../git.js';
@@ -31,7 +32,37 @@ const getHostDataFilePath = (filePath: string): string => {
 const getContainerDataFilePath = (filePath: string, originalFileName?: string): string => {
   const fileName = originalFileName || path.basename(filePath);
   return path.posix.join(DATA_MOUNT_PATH, fileName);
-}
+};
+
+/**
+ * Build merged environment variables for container: TeamEnvironment PRODUCTION keys + extraEnvVars.
+ * Production keys are applied first; extraEnvVars override if the same key exists.
+ * @returns Array of "KEY=value" strings for Docker Env, or undefined if empty
+ */
+const buildContainerEnv = async (
+  teamId: number,
+  extraEnvVars?: Record<string, string>,
+): Promise<string[] | undefined> => {
+  const productionEnvs = await prisma.teamEnvironment.findMany({
+    where: { teamId, scope: EnvironmentScope.PRODUCTION },
+    select: { keyName: true, keyValue: true },
+  });
+
+  const merged: Record<string, string> = {};
+  for (const env of productionEnvs) {
+    merged[env.keyName] = env.keyValue;
+  }
+  if (extraEnvVars) {
+    for (const [key, value] of Object.entries(extraEnvVars)) {
+      merged[key] = value;
+    }
+  }
+
+  const entries = Object.entries(merged);
+  return entries.length > 0
+    ? entries.map(([key, value]) => `${key}=${value}`)
+    : undefined;
+};
 
 /**
  * Extract repository name from GitHub URL
@@ -49,6 +80,105 @@ const extractRepoName = (githubUrl: string): string => {
  */
 const normalizeContainerName = (name: string): string => {
   return name.toLowerCase().replace(/\s+/g, '-');
+};
+
+/**
+ * Stop running projects for a team, remove existing container, then create and run a new container.
+ * Updates the project record with container info and returns it.
+ */
+const runProjectContainer = async (params: {
+  teamId: number;
+  projectId: number;
+  imageHash: string;
+  containerName: string;
+  extraEnvVars?: Record<string, string>;
+  dataFile?: string | null;
+  originalDataFileName?: string | null;
+}) => {
+  const {
+    teamId,
+    projectId,
+    imageHash,
+    containerName,
+    extraEnvVars,
+    dataFile,
+    originalDataFileName,
+  } = params;
+
+  // Stop any running projects for this team
+  const runningProjects = await prisma.project.findMany({
+    where: { teamId, status: 'running' },
+    select: { id: true, containerId: true },
+  });
+  for (const runningProject of runningProjects) {
+    if (runningProject.containerId) {
+      try {
+        const container = docker.getContainer(runningProject.containerId);
+        await container.stop();
+        await prisma.project.update({
+          where: { id: runningProject.id },
+          data: { status: 'stopped', stoppedAt: new Date(), failedCheckCount: 0, lastCheckedAt: null },
+        });
+        console.log(`Stopped running container for project ${runningProject.id}`);
+      } catch (error) {
+        console.log(`Failed to stop container ${runningProject.containerId}:`, error);
+      }
+    }
+  }
+
+  // Stop and remove existing container with the same name
+  try {
+    const existingContainer = docker.getContainer(containerName);
+    await existingContainer.stop();
+    console.log(`Stopped existing container: ${containerName}`);
+  } catch {
+    // Continue if container doesn't exist or already stopped
+  }
+  try {
+    const existingContainer = docker.getContainer(containerName);
+    await existingContainer.remove();
+    console.log(`Removed existing container: ${containerName}`);
+  } catch {
+    // Continue if remove fails
+  }
+
+  await ensureProjectsNetwork();
+
+  const containerEnv = await buildContainerEnv(teamId, extraEnvVars);
+  const containerConfig = {
+    Image: imageHash,
+    name: containerName,
+    Env: containerEnv,
+    HostConfig: {
+      AutoRemove: false,
+      NetworkMode: PROJECTS_NETWORK,
+      Memory: 800 * 1024 * 1024,
+      Binds: dataFile
+        ? [`${getHostDataFilePath(dataFile)}:${getContainerDataFilePath(dataFile, originalDataFileName ?? undefined)}:ro`]
+        : undefined,
+    },
+    NetworkingConfig: {
+      EndpointsConfig: {
+        [PROJECTS_NETWORK]: { Aliases: [containerName] },
+      },
+    },
+  };
+
+  const container = await docker.createContainer(containerConfig);
+  await container.start();
+  const containerInfo = await container.inspect();
+
+  return prisma.project.update({
+    where: { id: projectId },
+    data: {
+      containerId: container.id,
+      containerName: containerInfo.Name,
+      status: 'running',
+      ports: containerInfo.NetworkSettings.Ports,
+      deployedAt: new Date(),
+    },
+    include: { team: true },
+  });
 };
 
 /**
@@ -117,7 +247,7 @@ export const deploy = async (
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
   originalFileName?: string,
-  envVars?: Record<string, string>,
+  extraEnvVars?: Record<string, string>,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -165,76 +295,11 @@ export const deploy = async (
       buildArgs: buildArgs || {},
       dataFile: dataFilePath || null,
       originalDataFileName: originalFileName || null,
+      extraEnvVars: extraEnvVars || {},
     },
   });
 
   try {
-    // Find and stop any running projects for this team
-    const runningProjects = await prisma.project.findMany({
-      where: {
-        teamId,
-        status: 'running',
-      },
-      select: {
-        id: true,
-        containerId: true,
-      },
-    });
-
-    // Stop all running containers for this team
-    for (const runningProject of runningProjects) {
-      if (runningProject.containerId) {
-        try {
-          const container = docker.getContainer(runningProject.containerId);
-          await container.stop();
-          
-          // Update project status to stopped
-          await prisma.project.update({
-            where: { id: runningProject.id },
-            data: {
-              status: 'stopped',
-              stoppedAt: new Date(),
-              failedCheckCount: 0,
-              lastCheckedAt: null,
-            },
-          });
-          console.log(`Stopped running container for project ${runningProject.id}`);
-        } catch (error) {
-          // Continue even if stop fails (container might not exist)
-          console.log(
-            `Failed to stop container ${runningProject.containerId}:`,
-            error,
-          );
-        }
-      }
-    }
-
-    // Stop and remove existing container with the same name if it exists
-    const containerName = normalizeContainerName(team.name);
-    
-    // First try-catch: Stop the existing container
-    try {
-      const existingContainer = docker.getContainer(containerName);
-      await existingContainer.stop();
-      console.log(`Stopped existing container: ${containerName}`);
-    } catch (stopError) {
-      console.log(`Failed to stop container ${containerName}:`, stopError);
-      // Continue even if stop fails - container might not exist or already be stopped
-    }
-
-    // Second try-catch: Remove the existing container
-    try {
-      const existingContainer = docker.getContainer(containerName);
-      await existingContainer.remove();
-      console.log(`Removed existing container: ${containerName}`);
-    } catch (removeError) {
-      console.log(`Failed to remove container ${containerName}:`, removeError);
-      // Continue even if remove fails - we'll create a new container anyway
-    }
-
-    // Ensure the projects network exists
-    await ensureProjectsNetwork();
-
     // Clone the repository
     await git.clone(githubUrl, tempDir);
 
@@ -295,57 +360,24 @@ export const deploy = async (
       },
     });
 
-      // Run the container with appropriate startup command
-      // Use imageHash directly - Docker accepts image IDs
-      const containerConfig: unknown = {
-        Image: imageHash,
-      name: normalizeContainerName(team.name),
-      Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
-      HostConfig: {
-        AutoRemove: false,
-        NetworkMode: PROJECTS_NETWORK,
-        Memory: 800 * 1024 * 1024, // 800MB
-        Binds: dataFilePath
-          ? [`${getHostDataFilePath(dataFilePath)}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
-          : undefined,
-      },
-      NetworkingConfig: {
-        EndpointsConfig: {
-          [PROJECTS_NETWORK]: {
-            Aliases: [normalizeContainerName(team.name)],
-          },
-        },
-      },
-    };
-
-    const container = await docker.createContainer(containerConfig!);
-
-    await container.start();
-
-    // Get container info
-    const containerInfo = await container.inspect();
-
-    // Update project with container information
-    const updatedProject = await prisma.project.update({
-      where: { id: project.id },
-      data: {
-        containerId: container.id,
-        containerName: containerInfo.Name,
-        status: 'running',
-        ports: containerInfo.NetworkSettings.Ports,
-        deployedAt: new Date(),
-      },
-      include: {
-        team: true,
-      },
+    const containerName = normalizeContainerName(team.name);
+    const updatedProject = await runProjectContainer({
+      teamId,
+      projectId: project.id,
+      imageHash,
+      containerName,
+      extraEnvVars,
+      dataFile: dataFilePath,
+      originalDataFileName: originalFileName,
     });
 
+    const containerInfo = await docker.getContainer(updatedProject.containerId!).inspect();
     return {
       success: true,
       project: updatedProject,
       imageHash,
-      containerId: container.id,
-      containerName: containerInfo.Name,
+      containerId: updatedProject.containerId,
+      containerName: updatedProject.containerName,
       ports: containerInfo.NetworkSettings.Ports,
       state: containerInfo.State,
     };
@@ -718,14 +750,14 @@ export const streamBuildLogs = async (projectId: number) => {
  * Build and deploy a project with real-time log streaming
  * This version returns a stream that emits build events in real-time
  */
-export const buildWithStreaming = async (
+export const deployWithStreaming = async (
   teamId: number,
   githubUrl: string,
   deployedById: number,
   buildArgs?: Record<string, string>,
   dataFilePath?: string,
   originalFileName?: string,
-  envVars?: Record<string, string>,
+  extraEnvVars?: Record<string, string>,
 ) => {
   // Verify team exists
   const team = await prisma.team.findUnique({
@@ -774,7 +806,7 @@ export const buildWithStreaming = async (
       buildArgs: buildArgs || {},
       dataFile: dataFilePath || null,
       originalDataFileName: originalFileName || null,
-      envVars: envVars || {},
+      extraEnvVars: extraEnvVars || {},
     },
   });
 
@@ -889,48 +921,15 @@ export const buildWithStreaming = async (
         },
       });
 
-      // Run the container
-      // Use imageHash directly - Docker accepts image IDs
-      const containerConfig: unknown = {
-        Image: imageHash,
-        name: normalizeContainerName(team.name),
-        Env: envVars ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
-        HostConfig: {
-          AutoRemove: false,
-          NetworkMode: PROJECTS_NETWORK,
-          Memory: 800 * 1024 * 1024, // 800MB
-          Binds: dataFilePath
-            ? [`${getHostDataFilePath(dataFilePath)}:${getContainerDataFilePath(dataFilePath, originalFileName)}:ro`]
-            : undefined,
-        },
-        NetworkingConfig: {
-          EndpointsConfig: {
-            [PROJECTS_NETWORK]: {
-              Aliases: [normalizeContainerName(team.name)],
-            },
-          },
-        },
-      };
-
-      const container = await docker.createContainer(containerConfig!);
-      await container.start();
-
-      // Get container info
-      const containerInfo = await container.inspect();
-
-      // Update project with container information
-      const updatedProject = await prisma.project.update({
-        where: { id: project.id },
-        data: {
-          containerId: container.id,
-          containerName: containerInfo.Name,
-          status: 'running',
-          ports: containerInfo.NetworkSettings.Ports,
-          deployedAt: new Date(),
-        },
-        include: {
-          team: true,
-        },
+      const containerName = normalizeContainerName(team.name);
+      const updatedProject = await runProjectContainer({
+        teamId,
+        projectId: project.id,
+        imageHash,
+        containerName,
+        extraEnvVars,
+        dataFile: dataFilePath,
+        originalDataFileName: originalFileName,
       });
 
       return updatedProject;
@@ -1235,124 +1234,34 @@ export const deployFromProject = async (
       originalDataFileName: sourceProject.originalDataFileName,
       buildLogs: sourceProject.buildLogs,
       deployedById,
-      envVars: sourceProject.envVars || {},
+      extraEnvVars: (sourceProject.extraEnvVars as Record<string, string>) || {},
     },
   });
 
   try {
-    // Find and stop any running projects for this team
-    const runningProjects = await prisma.project.findMany({
-      where: {
-        teamId: sourceProject.teamId,
-        status: 'running',
-      },
-      select: {
-        id: true,
-        containerId: true,
-      },
-    });
-
-    // Stop all running containers for this team
-    for (const runningProject of runningProjects) {
-      if (runningProject.containerId) {
-        try {
-          const container = docker.getContainer(runningProject.containerId);
-          await container.stop();
-          
-          // Update project status to stopped
-          await prisma.project.update({
-            where: { id: runningProject.id },
-            data: {
-              status: 'stopped',
-              stoppedAt: new Date(),
-              failedCheckCount: 0,
-              lastCheckedAt: null,
-            },
-          });
-          console.log(`Stopped running container for project ${runningProject.id}`);
-        } catch (error) {
-          console.log(
-            `Failed to stop container ${runningProject.containerId}:`,
-            error,
-          );
-        }
-      }
-    }
-
-    // Stop and remove existing container with the same name if it exists
+    const extraEnvVars = (sourceProject.extraEnvVars as Record<string, string>) || {};
     const containerName = normalizeContainerName(sourceProject.team.name);
-    
-    try {
-      const existingContainer = docker.getContainer(containerName);
-      await existingContainer.stop();
-      console.log(`Stopped existing container: ${containerName}`);
-    } catch (stopError) {
-      console.log(`Failed to stop container ${containerName}:`, stopError);
-    }
 
-    try {
-      const existingContainer = docker.getContainer(containerName);
-      await existingContainer.remove();
-      console.log(`Removed existing container: ${containerName}`);
-    } catch (removeError) {
-      console.log(`Failed to remove container ${containerName}:`, removeError);
-    }
-
-    // Ensure the projects network exists
-    await ensureProjectsNetwork();
-
-    // Run the container with the same configuration
-    const envVars = (sourceProject.envVars as Record<string, string>) || {};
-    const containerConfig: unknown = {
-      Image: sourceProject.imageHash,
-      name: containerName,
-      Env: Object.keys(envVars).length > 0 ? Object.entries(envVars).map(([key, value]) => `${key}=${value}`) : undefined,
-      HostConfig: {
-        AutoRemove: false,
-        NetworkMode: PROJECTS_NETWORK,
-        Memory: 800 * 1024 * 1024, // 800MB
-        Binds: sourceProject.dataFile
-          ? [`${getHostDataFilePath(sourceProject.dataFile)}:${getContainerDataFilePath(sourceProject.dataFile, sourceProject.originalDataFileName || undefined)}:ro`]
-          : undefined,
-      },
-      NetworkingConfig: {
-        EndpointsConfig: {
-          [PROJECTS_NETWORK]: {
-            Aliases: [containerName],
-          },
-        },
-      },
-    };
-
-    const container = await docker.createContainer(containerConfig!);
-    await container.start();
-
-    // Get container info
-    const containerInfo = await container.inspect();
-
-    // Update project with container information
-    const updatedProject = await prisma.project.update({
-      where: { id: newProject.id },
-      data: {
-        containerId: container.id,
-        containerName: containerInfo.Name,
-        status: 'running',
-        ports: containerInfo.NetworkSettings.Ports,
-        deployedAt: new Date(),
-      },
-      include: {
-        team: true,
-      },
+    const updatedProject = await runProjectContainer({
+      teamId: sourceProject.teamId,
+      projectId: newProject.id,
+      imageHash: sourceProject.imageHash,
+      containerName,
+      extraEnvVars,
+      dataFile: sourceProject.dataFile,
+      originalDataFileName: sourceProject.originalDataFileName,
     });
 
     return {
       success: true,
       project: updatedProject,
       imageHash: sourceProject.imageHash,
-      containerId: container.id,
-      containerName: containerInfo.Name,
-      ports: containerInfo.NetworkSettings.Ports,
-      state: containerInfo.State,
+      containerId: updatedProject.containerId ?? undefined,
+      containerName: updatedProject.containerName ?? undefined,
+      ports: updatedProject.ports,
+      state: updatedProject.containerId
+        ? (await docker.getContainer(updatedProject.containerId).inspect()).State
+        : undefined,
     };
   } catch (error) {
     // Update project status to failed

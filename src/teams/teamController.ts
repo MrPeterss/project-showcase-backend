@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { EnvironmentScope } from '@prisma/client';
 import { prisma } from '../prisma.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import {
@@ -66,23 +67,19 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
   const teams = await prisma.team.findMany({
     where: { courseOfferingId: offeringId },
     include: {
-      members: {
-        include: {
-          user: {
-            select: { id: true, name: true, email: true },
-          },
-        },
-      },
+      members: true,
     },
   });
 
   // Get the appropriate project for each team
   const teamsWithProjects = await Promise.all(
     teams.map(async (team) => {
-      const project = await getTeamProject(team.id);
+      const project = await getTeamPreferredProject(team.id, {
+        deployedAt: true,
+      });
       return {
         ...team,
-        projects: project ? [project] : [],
+        projects: project ? [{ deployedAt: project.deployedAt }] : [],
       };
     }),
   );
@@ -106,6 +103,7 @@ export const getTeam = async (req: Request, res: Response) => {
         },
       },
       CourseOffering: true,
+      environments: true,
     },
   });
 
@@ -113,16 +111,36 @@ export const getTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check if user has access to the course offering this team belongs to
+  // Access: admins, instructors of the course offering, or team members only
+  let isInstructor = false;
   if (!isAdmin) {
-    const hasAccess = await checkCourseOfferingAccess(
+    const instructorAccess = await checkInstructorAccess(
       userId,
       team.courseOfferingId,
     );
-    if (!hasAccess) {
+    isInstructor = !!instructorAccess;
+    const isTeamMember = team.members.some((m) => m.userId === userId);
+    if (!isInstructor && !isTeamMember) {
       throw new ForbiddenError('Access denied to this team');
     }
+  } else {
+    isInstructor = true; // admins have instructor-level visibility
   }
+
+  // Map environments: omit PRODUCTION keyValue unless admin or instructor
+  const canSeeProductionValues = isAdmin || isInstructor;
+  const environments = (team.environments ?? []).map((env) => {
+    const shouldOmitValue =
+      env.scope === EnvironmentScope.PRODUCTION && !canSeeProductionValues;
+    return {
+      id: env.id,
+      teamId: env.teamId,
+      keyName: env.keyName,
+      keyValue: shouldOmitValue ? undefined : env.keyValue,
+      scope: env.scope,
+      isSecret: env.isSecret,
+    };
+  });
 
   // Get the appropriate project for this team
   const project = await getTeamProject(teamId);
@@ -151,8 +169,10 @@ export const getTeam = async (req: Request, res: Response) => {
     }
   }
 
+  const { environments: _envs, ...teamWithoutEnvs } = team;
   return res.json({
-    ...team,
+    ...teamWithoutEnvs,
+    environments,
     projects: project ? [project] : [],
     tags: orderedTags,
   });

@@ -13,6 +13,11 @@ enum CourseOfferingRole {
   VIEWER
 }
 
+enum EnvironmentScope {
+  PRODUCTION
+  DEVELOPMENT
+}
+
 model User {
   id           Int      @id @default(autoincrement())
   name         String?
@@ -74,8 +79,22 @@ model Team {
   CourseOffering   CourseOffering @relation(fields: [courseOfferingId], references: [id])
   courseOfferingId Int
 
-  members  TeamMembership[]
-  projects Project[]
+  members       TeamMembership[]
+  projects      Project[]
+  environments  TeamEnvironment[]
+}
+
+model TeamEnvironment {
+  id       Int              @id @default(autoincrement())
+  teamId   Int
+  keyName  String
+  keyValue String
+  scope    EnvironmentScope
+  isSecret Boolean          @default(false)
+
+  team Team @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, keyName, scope])
 }
 
 model CourseOfferingEnrollment {
@@ -110,7 +129,7 @@ model Project {
   ports                Json? // Store port mappings as JSON
   buildLogs            String? // Store build logs as text
   buildArgs            Json? // Store build arguments as JSON
-  envVars              Json? // Store environment variables as JSON
+  extraEnvVars         Json? // Store extra project-specific environment variables as JSON
   dataFile             String? // Path to uploaded data file on host
   originalDataFileName String? // Original filename of the uploaded data file
   deployedAt           DateTime  @default(now())

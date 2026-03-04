@@ -10,7 +10,7 @@ import {
   stopProject,
   streamProjectLogs,
   streamBuildLogs,
-  buildWithStreaming,
+  deployWithStreaming,
   deployFromProject,
 } from './projectService.js';
 import { docker } from '../docker.js';
@@ -26,12 +26,12 @@ export const getAllImages = async (_req: Request, res: Response) => {
 };
 
 export const deployProject = async (req: Request, res: Response) => {
-  const { teamId, githubUrl, buildArgs, envVars } = req.body;
+  const { teamId, githubUrl, buildArgs, extraEnvVars } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
 
-  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName, envVars);
+  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName, extraEnvVars);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -225,20 +225,20 @@ export const deployProjectWithStreamingController = async (
   req: Request,
   res: Response,
 ) => {
-  const { teamId, githubUrl, buildArgs, envVars } = req.body;
+  const { teamId, githubUrl, buildArgs, extraEnvVars } = req.body;
   const { userId } = req.user!;
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
 
   try {
-    const { project, initBuild, completeBuild } = await buildWithStreaming(
+    const { project, initBuild, completeBuild } = await deployWithStreaming(
       Number(teamId),
       githubUrl,
       userId,
       buildArgs,
       dataFilePath,
       originalFileName,
-      envVars,
+      extraEnvVars,
     );
 
     // Set headers for Server-Sent Events

@@ -90,40 +90,6 @@ export const getCourseOffering = async (req: Request, res: Response) => {
           },
         },
       },
-      teams: {
-        include: {
-          members: {
-            include: {
-              user: {
-                select: { id: true, email: true },
-              },
-            },
-          },
-          projects: {
-            where: { status: 'running' },
-            orderBy: { deployedAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              githubUrl: true,
-              imageHash: true,
-              containerId: true,
-              containerName: true,
-              status: true,
-              ports: true,
-              deployedAt: true,
-              stoppedAt: true,
-              deployedBy: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true,
-                },
-              },
-            },
-          },
-        },
-      },
     },
   });
 
