@@ -19,6 +19,15 @@ import {
   removeMemberFromTeam,
 } from './teamService.js';
 
+/** Formats member for API response: omits teamId, redacts user name/email unless canSeeNames */
+const formatMember = <M extends { userId: number; user: { id: number } }>(
+  m: M,
+  canSeeNames: boolean,
+): { userId: number; user: M['user'] | { id: number } } => ({
+  userId: m.userId,
+  user: canSeeNames ? m.user : { id: m.user.id },
+});
+
 // Helper function to get the appropriate project for a team
 // Returns the newest running project if available, otherwise the newest project regardless of status
 const getTeamProject = async (teamId: number) => {
@@ -67,11 +76,21 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
   const teams = await prisma.team.findMany({
     where: { courseOfferingId: offeringId },
     include: {
-      members: true,
+      members: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
-  // Get the appropriate project for each team
   const teamsWithProjects = await Promise.all(
     teams.map(async (team) => {
       const project = await getTeamPreferredProject(team.id, {
@@ -82,6 +101,7 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
       });
       return {
         ...team,
+        members: team.members.map((m) => formatMember(m, isAdmin)),
         projects: project
           ? [
               {
@@ -108,7 +128,8 @@ export const getTeam = async (req: Request, res: Response) => {
     where: { id: teamId },
     include: {
       members: {
-        include: {
+        select: {
+          userId: true,
           user: {
             select: { id: true, name: true, email: true },
           },
@@ -124,6 +145,7 @@ export const getTeam = async (req: Request, res: Response) => {
   }
 
   // Access: admins, instructors of the course offering, or team members only
+  const isTeamMember = team.members.some((m) => m.userId === userId);
   let isInstructor = false;
   if (!isAdmin) {
     const instructorAccess = await checkInstructorAccess(
@@ -131,13 +153,15 @@ export const getTeam = async (req: Request, res: Response) => {
       team.courseOfferingId,
     );
     isInstructor = !!instructorAccess;
-    const isTeamMember = team.members.some((m) => m.userId === userId);
     if (!isInstructor && !isTeamMember) {
       throw new ForbiddenError('Access denied to this team');
     }
   } else {
     isInstructor = true; // admins have instructor-level visibility
   }
+
+  const canSeeMemberNames = isAdmin || isTeamMember;
+  const members = team.members.map((m) => formatMember(m, canSeeMemberNames));
 
   // Map environments: omit PRODUCTION keyValue unless admin or instructor
   const canSeeProductionValues = isAdmin || isInstructor;
@@ -181,9 +205,10 @@ export const getTeam = async (req: Request, res: Response) => {
     }
   }
 
-  const { environments: _envs, ...teamWithoutEnvs } = team;
+  const { environments: _envs, members: _members, ...teamWithoutEnvs } = team;
   return res.json({
     ...teamWithoutEnvs,
+    members,
     environments,
     projects: project ? [project] : [],
     tags: orderedTags,
@@ -390,7 +415,8 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
       team: {
         include: {
           members: {
-            include: {
+            select: {
+              userId: true,
               user: {
                 select: { id: true, name: true, email: true },
               },
@@ -405,8 +431,13 @@ export const getMyTeamsInOffering = async (req: Request, res: Response) => {
   const teams = await Promise.all(
     teamMemberships.map(async (membership) => {
       const project = await getTeamProject(membership.team.id);
+      const members = membership.team.members.map((m) =>
+        formatMember(m, isAdmin),
+      );
+      const { members: _m, ...teamWithoutMembers } = membership.team;
       return {
-        ...membership.team,
+        ...teamWithoutMembers,
+        members,
         projects: project ? [project] : [],
       };
     }),
