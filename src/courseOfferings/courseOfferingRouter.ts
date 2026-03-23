@@ -5,6 +5,7 @@ import {
   enrollmentParamsSchema,
   updateEnrollmentSchema,
 } from '../enrollment/enrollment.schema.js';
+import sparkRouter from '../spark/sparkRouter.js';
 import {
   createCourseOfferingEnrollments,
   deleteCourseOfferingEnrollment,
@@ -137,6 +138,9 @@ router.get(
   validateRequest(courseOfferingTeamsParamsSchema),
   getMyTeamsInOffering,
 );
+
+// Spark key management routes (admin or instructor)
+router.use('/:offeringId/spark', sparkRouter);
 
 // Project tagging routes (admin or instructor)
 router.post(
