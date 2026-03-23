@@ -47,10 +47,12 @@ const storage = multer.diskStorage({
   },
 });
 
+const MAX_DATA_FILE_SIZE_BYTES = 1024 * 1024 * 1024; // 1GB
+
 const upload = multer({
   storage,
   limits: {
-    fileSize: 100 * 1024 * 1024, // 100MB max file size
+    fileSize: MAX_DATA_FILE_SIZE_BYTES,
   },
 });
 

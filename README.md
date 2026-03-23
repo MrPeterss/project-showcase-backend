@@ -234,7 +234,7 @@ curl -X POST http://localhost:3000/api/projects/deploy-streaming \
 
 ### Data File Details
 
-- **Upload Limit:** 100MB per file
+- **Upload Limit:** 1GB per file
 - **Storage:** Files are stored on the host at `./project-data-files/` (persists across restarts)
 - **Mount Path:** All uploaded files are mounted read-only at `/data/uploaded-data` in the container
 - **Access in Container:** Your application can read the file at `/data/uploaded-data`
