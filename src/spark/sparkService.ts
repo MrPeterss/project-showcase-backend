@@ -171,9 +171,11 @@ export const getSparkKeysForOffering = async (
   const offering = await getCourseOfferingWithDetails(offeringId);
   const origin = buildCourseOfferingOrigin(offering);
 
-  return callSparkApi<SparkKey[]>(
+  const response = await callSparkApi<{ keys: SparkKey[] } | SparkKey[]>(
     `/api/keys?origin=${encodeURIComponent(origin)}`,
   );
+
+  return Array.isArray(response) ? response : response.keys;
 };
 
 /**
