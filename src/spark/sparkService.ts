@@ -196,6 +196,10 @@ export const revokeSparkKey = async (
     method: 'POST',
     body: JSON.stringify({ keyIds: [sparkKeyId] }),
   });
+
+  await prisma.teamEnvironment.deleteMany({
+    where: { keyName: 'SPARK_API_KEY', keyValue: key.key },
+  });
 };
 
 /**
