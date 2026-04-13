@@ -65,14 +65,18 @@ const buildContainerEnv = async (
 };
 
 /**
- * Merge Docker `docker build` arguments: team PRODUCTION `VITE_*` keys from TeamEnvironment,
- * plus explicit `buildArgs` from the deploy request (request overrides on key collision).
- * Vite embeds `import.meta.env.VITE_*` at `vite build` time, so those values must be supplied as
- * Docker build args (and typically ARG + ENV in the Dockerfile) rather than only at container runtime.
+ * Merge Docker `docker build` arguments for `docker build`:
+ * 1. Team PRODUCTION `VITE_*` from TeamEnvironment
+ * 2. `VITE_*` from deploy `extraEnvVars` (per-deploy; overrides team)
+ * 3. `buildArgs` from the deploy request (overrides any same key; may include non-VITE keys)
+ *
+ * `extraEnvVars` is also applied at container runtime, but only `VITE_*` here are duplicated into
+ * build args so Vite sees new values when you change per-deploy env without changing team keys.
  */
 const resolveDockerBuildArgs = async (
   teamId: number,
   requestBuildArgs?: Record<string, string>,
+  extraEnvVars?: Record<string, string>,
 ): Promise<Record<string, string>> => {
   const productionEnvs = await prisma.teamEnvironment.findMany({
     where: { teamId, scope: EnvironmentScope.PRODUCTION },
@@ -85,11 +89,16 @@ const resolveDockerBuildArgs = async (
       merged[env.keyName] = env.keyValue;
     }
   }
-  if (requestBuildArgs) {
-    for (const [key, value] of Object.entries(requestBuildArgs)) {
+  if (extraEnvVars) {
+    for (const [key, value] of Object.entries(extraEnvVars)) {
       if (key.startsWith('VITE_')) {
         merged[key] = value;
       }
+    }
+  }
+  if (requestBuildArgs) {
+    for (const [key, value] of Object.entries(requestBuildArgs)) {
+      merged[key] = value;
     }
   }
   return merged;
@@ -315,7 +324,7 @@ export const deploy = async (
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
 
-  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs);
+  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs, extraEnvVars);
 
   // Create initial project record
   const project = await prisma.project.create({
@@ -828,7 +837,7 @@ export const deployWithStreaming = async (
   // Use team name for image name
   const imageName = `${normalizeContainerName(team.name)}:latest`;
 
-  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs);
+  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs, extraEnvVars);
 
   // Create initial project record
   const project = await prisma.project.create({

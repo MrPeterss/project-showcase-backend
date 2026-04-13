@@ -207,12 +207,13 @@ Build arguments are stored in the database along with the project deployment inf
 
 Vite inlines `import.meta.env.VITE_*` values when you run `vite build`, so those values must be available during **`docker build`**, not only when the container starts.
 
-This platform merges two sources into Docker build args (then passes them to `docker build`):
+This platform merges into Docker build args (then passes them to `docker build`), in order (later overrides earlier):
 
-1. **Team-issued PRODUCTION environment variables** whose names start with `VITE_` (from the team’s environment configuration).
-2. **`buildArgs`** from the deploy request. If a key appears in both, the deploy request wins.
+1. **Team-issued PRODUCTION** variables whose names start with `VITE_`.
+2. **`extraEnvVars`** on the deploy request — only keys starting with `VITE_` are added to the build (they are still merged into the container environment at runtime with all other keys).
+3. **`buildArgs`** from the deploy request (any keys, including non-`VITE_`).
 
-You can still set `VITE_*` only in `buildArgs` if you prefer; you do not need duplicate team keys unless you want the same values at runtime as normal container environment variables.
+If you only change `VITE_*` in **extra env** on deploy, those values must be included here so `docker build` sees a new `--build-arg` and the frontend layer cache invalidates. Previously, changing only runtime env did not affect the image build.
 
 In your Dockerfile, declare each variable with `ARG`, expose it to the Vite build with `ENV`, and run the frontend build in that stage:
 
