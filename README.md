@@ -203,6 +203,28 @@ CMD ["npm", "start"]
 
 Build arguments are stored in the database along with the project deployment information and can be viewed in the project details.
 
+### Vite and `VITE_*` variables
+
+Vite inlines `import.meta.env.VITE_*` values when you run `vite build`, so those values must be available during **`docker build`**, not only when the container starts.
+
+This platform merges two sources into Docker build args (then passes them to `docker build`):
+
+1. **Team-issued PRODUCTION environment variables** whose names start with `VITE_` (from the team’s environment configuration).
+2. **`buildArgs`** from the deploy request. If a key appears in both, the deploy request wins.
+
+You can still set `VITE_*` only in `buildArgs` if you prefer; you do not need duplicate team keys unless you want the same values at runtime as normal container environment variables.
+
+In your Dockerfile, declare each variable with `ARG`, expose it to the Vite build with `ENV`, and run the frontend build in that stage:
+
+```dockerfile
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+WORKDIR /app/frontend
+RUN npm ci && npm run build
+```
+
+Use only **non-secret** values in `VITE_*` (anything in the frontend bundle is public).
+
 ## Project Deployment with Data Files
 
 When deploying projects, you can upload a data file that will be automatically mounted to the deployed container. This is useful for providing datasets, configuration files, or other resources that your project needs at runtime.

@@ -20,14 +20,44 @@ export const deployProjectSchema = z.object({
         /^https?:\/\/(www\.)?github\.com\/[\w-]+\/[\w.-]+(\/(tree|blob)\/[\w.-]+)?(\.git)?$/,
         'Must be a valid GitHub repository URL',
       ),
-    buildArgs: z.string().optional().transform((val) => {
-      if (!val) return undefined;
-      try {
-        return JSON.parse(val);
-      } catch {
-        return undefined;
-      }
-    }),
+    // Multipart sends JSON as a string; `application/json` bodies use a nested object.
+    buildArgs: z
+      .union([z.string(), z.record(z.string(), z.string())])
+      .optional()
+      .transform((val, ctx) => {
+        if (val === undefined || val === '') return undefined;
+        if (typeof val === 'object' && val !== null) {
+          return val as Record<string, string>;
+        }
+        try {
+          const parsed = JSON.parse(val) as unknown;
+          if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: 'buildArgs must be a JSON object',
+            });
+            return z.NEVER;
+          }
+          const out: Record<string, string> = {};
+          for (const [key, value] of Object.entries(parsed)) {
+            if (typeof value !== 'string') {
+              ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `buildArgs.${key} must be a string`,
+              });
+              return z.NEVER;
+            }
+            out[key] = value;
+          }
+          return out;
+        } catch {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'buildArgs must be valid JSON',
+          });
+          return z.NEVER;
+        }
+      }),
     extraEnvVars: z.string().optional().transform((val, ctx) => {
       if (!val) return undefined;
       try {

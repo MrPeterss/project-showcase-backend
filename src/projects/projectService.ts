@@ -65,6 +65,37 @@ const buildContainerEnv = async (
 };
 
 /**
+ * Merge Docker `docker build` arguments: team PRODUCTION `VITE_*` keys from TeamEnvironment,
+ * plus explicit `buildArgs` from the deploy request (request overrides on key collision).
+ * Vite embeds `import.meta.env.VITE_*` at `vite build` time, so those values must be supplied as
+ * Docker build args (and typically ARG + ENV in the Dockerfile) rather than only at container runtime.
+ */
+const resolveDockerBuildArgs = async (
+  teamId: number,
+  requestBuildArgs?: Record<string, string>,
+): Promise<Record<string, string>> => {
+  const productionEnvs = await prisma.teamEnvironment.findMany({
+    where: { teamId, scope: EnvironmentScope.PRODUCTION },
+    select: { keyName: true, keyValue: true },
+  });
+
+  const merged: Record<string, string> = {};
+  for (const env of productionEnvs) {
+    if (env.keyName.startsWith('VITE_')) {
+      merged[env.keyName] = env.keyValue;
+    }
+  }
+  if (requestBuildArgs) {
+    for (const [key, value] of Object.entries(requestBuildArgs)) {
+      if (key.startsWith('VITE_')) {
+        merged[key] = value;
+      }
+    }
+  }
+  return merged;
+};
+
+/**
  * Extract repository name from GitHub URL
  */
 const extractRepoName = (githubUrl: string): string => {
@@ -284,6 +315,8 @@ export const deploy = async (
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
 
+  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs);
+
   // Create initial project record
   const project = await prisma.project.create({
     data: {
@@ -292,7 +325,7 @@ export const deploy = async (
       imageHash: '', // Will be set after build
       status: 'building',
       deployedById,
-      buildArgs: buildArgs || {},
+      buildArgs: mergedBuildArgs,
       dataFile: dataFilePath || null,
       originalDataFileName: originalFileName || null,
       extraEnvVars: extraEnvVars || {},
@@ -309,11 +342,11 @@ export const deploy = async (
       t: imageName,
     };
     
-    // Add build args if provided
-    if (buildArgs && Object.keys(buildArgs).length > 0) {
-      buildOptions.buildargs = buildArgs;
+    // Add build args
+    if (Object.keys(mergedBuildArgs).length > 0) {
+      buildOptions.buildargs = mergedBuildArgs;
     }
-    
+
     const stream = await docker.buildImage(
       {
         context: tempDir,
@@ -795,6 +828,8 @@ export const deployWithStreaming = async (
   // Use team name for image name
   const imageName = `${normalizeContainerName(team.name)}:latest`;
 
+  const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs);
+
   // Create initial project record
   const project = await prisma.project.create({
     data: {
@@ -803,7 +838,7 @@ export const deployWithStreaming = async (
       imageHash: '', // Will be set after build
       status: 'building',
       deployedById,
-      buildArgs: buildArgs || {},
+      buildArgs: mergedBuildArgs,
       dataFile: dataFilePath || null,
       originalDataFileName: originalFileName || null,
       extraEnvVars: extraEnvVars || {},
@@ -879,12 +914,11 @@ export const deployWithStreaming = async (
       const buildOptions: Record<string, unknown> = {
         t: imageName,
       };
-      
-      // Add build args if provided
-      if (buildArgs && Object.keys(buildArgs).length > 0) {
-        buildOptions.buildargs = buildArgs;
+
+      if (Object.keys(mergedBuildArgs).length > 0) {
+        buildOptions.buildargs = mergedBuildArgs;
       }
-      
+
       const buildStream = await docker.buildImage(
         {
           context: tempDir,
