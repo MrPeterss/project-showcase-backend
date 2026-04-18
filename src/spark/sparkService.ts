@@ -24,6 +24,103 @@ export interface SparkStats {
   daily: { date: string; count: number; totalTokens: number }[];
 }
 
+/** User breakdown from Spark (optional on per-key stats; merged for offering totals). */
+export interface SparkTopUser {
+  userId: number;
+  netId?: string | null;
+  name?: string | null;
+  email?: string | null;
+  requestCount: number;
+  totalTokens: number;
+}
+
+/** Combined stats for every Spark key in a course offering (same buckets as single-key stats). */
+export interface SparkAggregatedKeysStats {
+  keyIds: number[];
+  totalRequests: number;
+  totalTokens: number;
+  lastUsedAt: string | null;
+  hourly: { hour: string; count: number; totalTokens: number }[];
+  daily: { date: string; count: number; totalTokens: number }[];
+  topUsers: SparkTopUser[];
+}
+
+type SparkStatsResponse = SparkStats & { topUsers?: SparkTopUser[] };
+
+const mergeHourlySeries = (
+  series: { hour: string; count: number; totalTokens: number }[][],
+): { hour: string; count: number; totalTokens: number }[] => {
+  const combined = new Map<string, { count: number; totalTokens: number }>();
+  for (const arr of series) {
+    for (const row of arr) {
+      const prev = combined.get(row.hour) ?? { count: 0, totalTokens: 0 };
+      combined.set(row.hour, {
+        count: prev.count + row.count,
+        totalTokens: prev.totalTokens + row.totalTokens,
+      });
+    }
+  }
+  return [...combined.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([hour, v]) => ({ hour, ...v }));
+};
+
+const mergeDailySeries = (
+  series: { date: string; count: number; totalTokens: number }[][],
+): { date: string; count: number; totalTokens: number }[] => {
+  const combined = new Map<string, { count: number; totalTokens: number }>();
+  for (const arr of series) {
+    for (const row of arr) {
+      const prev = combined.get(row.date) ?? { count: 0, totalTokens: 0 };
+      combined.set(row.date, {
+        count: prev.count + row.count,
+        totalTokens: prev.totalTokens + row.totalTokens,
+      });
+    }
+  }
+  return [...combined.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, v]) => ({ date, ...v }));
+};
+
+const mergeTopUsers = (
+  lists: (SparkTopUser[] | undefined)[],
+  limit: number,
+): SparkTopUser[] => {
+  const byId = new Map<number, SparkTopUser>();
+  for (const list of lists) {
+    if (!list?.length) continue;
+    for (const u of list) {
+      const prev = byId.get(u.userId);
+      if (!prev) {
+        byId.set(u.userId, { ...u });
+      } else {
+        byId.set(u.userId, {
+          userId: u.userId,
+          requestCount: prev.requestCount + u.requestCount,
+          totalTokens: prev.totalTokens + u.totalTokens,
+          name: prev.name ?? u.name,
+          email: prev.email ?? u.email,
+          netId: prev.netId ?? u.netId,
+        });
+      }
+    }
+  }
+  return [...byId.values()]
+    .sort(
+      (a, b) =>
+        b.totalTokens - a.totalTokens ||
+        b.requestCount - a.requestCount,
+    )
+    .slice(0, limit);
+};
+
+const maxIsoDate = (dates: (string | null)[]): string | null => {
+  const valid = dates.filter((d): d is string => d != null && d !== '');
+  if (valid.length === 0) return null;
+  return valid.reduce((a, b) => (a > b ? a : b));
+};
+
 type CourseOfferingWithDetails = {
   course: { department: string; number: number };
   semester: { season: string; year: number };
@@ -219,4 +316,48 @@ export const getSparkKeyStats = async (
   return callSparkApi<SparkStats>(
     `/api/stats?key=${encodeURIComponent(key.key)}`,
   );
+};
+
+/**
+ * Aggregate usage for every Spark key in this offering: same hourly/daily series as
+ * single-key stats, summed across keys. `topUsers` merges per-key `topUsers` from Spark
+ * (last 48h breakdown) and returns the top 10 by total tokens.
+ */
+export const getSparkAggregatedKeyStats = async (
+  offeringId: number,
+): Promise<SparkAggregatedKeysStats> => {
+  const keys = await getSparkKeysForOffering(offeringId);
+
+  if (keys.length === 0) {
+    return {
+      keyIds: [],
+      totalRequests: 0,
+      totalTokens: 0,
+      lastUsedAt: null,
+      hourly: [],
+      daily: [],
+      topUsers: [],
+    };
+  }
+
+  const perKey = await Promise.all(
+    keys.map((k) =>
+      callSparkApi<SparkStatsResponse>(
+        `/api/stats?key=${encodeURIComponent(k.key)}`,
+      ),
+    ),
+  );
+
+  return {
+    keyIds: keys.map((k) => k.id),
+    totalRequests: perKey.reduce((s, x) => s + x.totalRequests, 0),
+    totalTokens: perKey.reduce((s, x) => s + x.totalTokens, 0),
+    lastUsedAt: maxIsoDate(perKey.map((x) => x.lastUsedAt)),
+    hourly: mergeHourlySeries(perKey.map((x) => x.hourly)),
+    daily: mergeDailySeries(perKey.map((x) => x.daily)),
+    topUsers: mergeTopUsers(
+      perKey.map((x) => x.topUsers),
+      10,
+    ),
+  };
 };

@@ -16,6 +16,21 @@ const normalizeContainerName = (name: string): string => {
   return name.toLowerCase().replace(/\s+/g, '-');
 };
 
+/** Tag names for Docker labeling (OfferingTag links, else legacy Project.tag). */
+const getProjectTagNamesForDocker = (project: {
+  tag: string | null;
+  projectOfferingTags: { offeringTag: { name: string } }[];
+}): string[] => {
+  const fromLinks = project.projectOfferingTags.map((l) => l.offeringTag.name);
+  if (fromLinks.length > 0) {
+    return [...fromLinks].sort((a, b) => a.localeCompare(b));
+  }
+  if (project.tag) {
+    return [project.tag];
+  }
+  return [];
+};
+
 export const promoteUser = async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId);
   
@@ -141,6 +156,11 @@ export const getAllProjects = async (_req: Request, res: Response) => {
             },
           },
         },
+        projectOfferingTags: {
+          include: {
+            offeringTag: true,
+          },
+        },
       },
     });
 
@@ -171,6 +191,7 @@ export const getAllProjects = async (_req: Request, res: Response) => {
         id: number;
         githubUrl: string;
         status: string;
+        tags: string[];
         tag: string | null;
         imageHash: string;
         imageName: string;
@@ -217,10 +238,10 @@ export const getAllProjects = async (_req: Request, res: Response) => {
         });
       }
 
-      // Reconstruct image name from team name and tag
-      const tag = (project as { tag?: string | null }).tag;
-      const imageName = tag
-        ? `${normalizeContainerName(project.team.name)}:${tag}`
+      const tagNames = getProjectTagNamesForDocker(project);
+      const primaryTag = tagNames[0] ?? null;
+      const imageName = primaryTag
+        ? `${normalizeContainerName(project.team.name)}:${primaryTag}`
         : `${normalizeContainerName(project.team.name)}:latest`;
 
       const imageHash = (project as unknown as { imageHash: string }).imageHash;
@@ -264,7 +285,8 @@ export const getAllProjects = async (_req: Request, res: Response) => {
         id: project.id,
         githubUrl: project.githubUrl,
         status: project.status,
-        tag: tag || null,
+        tags: tagNames,
+        tag: primaryTag,
         imageHash: imageHash || '',
         imageName,
         containerId: project.containerId,
@@ -353,11 +375,16 @@ export const pruneProject = async (req: Request, res: Response) => {
       }
     }
 
-    // Get all tagged projects and add their image hashes to protected set
+    // Tagged projects (legacy column or join table) protect images
     const taggedProjects = await prisma.project.findMany({
       where: {
         AND: [
-          { tag: { not: null } },
+          {
+            OR: [
+              { tag: { not: null } },
+              { projectOfferingTags: { some: {} } },
+            ],
+          },
           { status: { not: 'pruned' } },
           { id: { not: projectId } }, // Exclude current project
         ],
@@ -539,6 +566,11 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
             },
           },
         },
+        projectOfferingTags: {
+          include: {
+            offeringTag: true,
+          },
+        },
       },
     });
 
@@ -597,10 +629,10 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
             containers: [],
           });
         }
-        // Reconstruct image name from team name and tag
-        const tag = (project as { tag?: string | null }).tag;
-        const imageName = tag
-          ? `${normalizeContainerName(project.team.name)}:${tag}`
+        const tagNames = getProjectTagNamesForDocker(project);
+        const primaryTag = tagNames[0] ?? null;
+        const imageName = primaryTag
+          ? `${normalizeContainerName(project.team.name)}:${primaryTag}`
           : `${normalizeContainerName(project.team.name)}:latest`;
 
         teamsMap.get(teamId)!.containers.push({
@@ -718,7 +750,7 @@ export const getDataFilesByTeam = async (_req: Request, res: Response) => {
         const fileName = path.basename(project.dataFile);
         const filePath = path.join(dataDir, fileName);
         
-        let fileInfo: {
+        const fileInfo: {
           projectId: number;
           githubUrl: string;
           status: string;

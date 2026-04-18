@@ -4,6 +4,7 @@ import { validateRequest } from '../middleware/validateRequest.js';
 import {
   getKeyStats,
   getKeys,
+  getKeysStats,
   issueKeys,
   revokeKey,
 } from './sparkController.js';
@@ -19,6 +20,8 @@ const router = Router({ mergeParams: true });
 router.post('/keys', validateRequest(issueSparkKeysSchema), issueKeys);
 
 router.get('/keys', validateRequest(sparkOfferingParamsSchema), getKeys);
+
+router.get('/keys/stats', validateRequest(sparkOfferingParamsSchema), getKeysStats);
 
 router.delete(
   '/keys/:sparkKeyId',

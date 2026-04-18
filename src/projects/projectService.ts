@@ -1264,6 +1264,11 @@ export const deployFromProject = async (
     throw new NotFoundError('Data file not found. The file may have been deleted.');
   }
 
+  const sourceTagLinks = await prisma.projectOfferingTag.findMany({
+    where: { projectId: sourceProjectId },
+    select: { offeringTagId: true },
+  });
+
   // Create a new project record
   const newProject = await prisma.project.create({
     data: {
@@ -1280,6 +1285,15 @@ export const deployFromProject = async (
       extraEnvVars: (sourceProject.extraEnvVars as Record<string, string>) || {},
     },
   });
+
+  if (sourceTagLinks.length > 0) {
+    await prisma.projectOfferingTag.createMany({
+      data: sourceTagLinks.map((l) => ({
+        projectId: newProject.id,
+        offeringTagId: l.offeringTagId,
+      })),
+    });
+  }
 
   try {
     const extraEnvVars = (sourceProject.extraEnvVars as Record<string, string>) || {};

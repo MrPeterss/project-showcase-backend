@@ -66,6 +66,7 @@ model CourseOffering {
   enrollments         CourseOfferingEnrollment[] @relation("courseOffering")
   referredEnrollments CourseOfferingEnrollment[] @relation("referringCourseOffering")
   teams               Team[]
+  offeringTags        OfferingTag[]
 
   @@unique([courseId, semesterId])
 }
@@ -122,7 +123,7 @@ model Project {
   id                   Int       @id @default(autoincrement())
   githubUrl            String
   imageHash            String // Docker image ID/hash (sha256:...)
-  tag                  String? // Optional tag for the image (e.g., "v1.0")
+  tag                  String? // Legacy: last/mirror of tag name for compatibility; use ProjectOfferingTag
   containerId          String?   @unique
   containerName        String?
   status               String // running, stopped, failed, etc.
@@ -144,5 +145,34 @@ model Project {
   deployedBy   User? @relation(fields: [deployedById], references: [id])
   deployedById Int?
 
+  projectOfferingTags ProjectOfferingTag[]
+
   @@index([status])
+}
+
+/// A named tag within a course offering (e.g. milestone-1). Replaces ad-hoc Project.tag for new data.
+model OfferingTag {
+  id               Int      @id @default(autoincrement())
+  courseOfferingId Int
+  name             String
+  createdAt        DateTime @default(now())
+
+  courseOffering CourseOffering       @relation(fields: [courseOfferingId], references: [id], onDelete: Cascade)
+  projectLinks   ProjectOfferingTag[]
+
+  @@unique([courseOfferingId, name])
+  @@index([courseOfferingId])
+}
+
+/// Links a project deployment to one offering tag (many tags per project over time).
+model ProjectOfferingTag {
+  projectId     Int
+  offeringTagId Int
+  createdAt     DateTime @default(now())
+
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  offeringTag OfferingTag @relation(fields: [offeringTagId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, offeringTagId])
+  @@index([offeringTagId])
 }

@@ -263,8 +263,9 @@ const getHostDataFilePath = (filePath: string): string => {
 /**
  * Prune all untagged, non-running projects
  * Two-step process:
- * 1. Build a set of protected images from running containers and tagged projects
- * 2. Prune non-running, non-pruned, untagged projects and remove their resources
+ * 1. Build a set of protected images from running containers and projects with tags
+ *    (legacy Project.tag or ProjectOfferingTag links)
+ * 2. Prune non-running, non-pruned projects with no tags and remove their resources
  */
 export const pruneUntaggedProjects = async (): Promise<{
   totalFound: number;
@@ -293,15 +294,22 @@ export const pruneUntaggedProjects = async (): Promise<{
       const imageHash = (project as unknown as { imageHash: string }).imageHash;
       if (imageHash) {
         protectedImages.add(imageHash);
-        project.containerId && protectedContainers.add(project.containerId);
+        if (project.containerId) {
+          protectedContainers.add(project.containerId);
+        }
       }
     }
 
-    // Get all tagged projects and add their image hashes to protected set
+    // Get all projects with any tag (legacy column or join table) and add their image hashes
     const taggedProjects = await prisma.project.findMany({
       where: {
         AND: [
-          { tag: { not: null } },
+          {
+            OR: [
+              { tag: { not: null } },
+              { projectOfferingTags: { some: {} } },
+            ],
+          },
           { status: { not: 'pruned' } },
         ],
       },
@@ -316,18 +324,20 @@ export const pruneUntaggedProjects = async (): Promise<{
       const imageHash = (project as unknown as { imageHash: string }).imageHash;
       if (imageHash) {
         protectedImages.add(imageHash);
-        project.containerId && protectedContainers.add(project.containerId);
+        if (project.containerId) {
+          protectedContainers.add(project.containerId);
+        }
       }
     }
 
-    // Get projects that need to be pruned
-    // Non-running, non-pruned, untagged projects
+    // Non-running, non-pruned, no legacy tag and no OfferingTag links
     const projectsToPrune = await prisma.project.findMany({
       where: {
         AND: [
           { status: { not: 'running' } },
           { status: { not: 'pruned' } },
           { tag: null },
+          { projectOfferingTags: { none: {} } },
         ],
       },
       select: {

@@ -5,6 +5,7 @@ import type { EnvironmentScope } from '@prisma/client';
 import { ForbiddenError } from '../utils/AppError.js';
 import { checkInstructorAccess } from '../utils/authorizationHelpers.js';
 import {
+  getSparkAggregatedKeyStats,
   getSparkKeyStats,
   getSparkKeysForOffering,
   issueSparkKeys,
@@ -76,6 +77,18 @@ export const revokeKey = async (req: Request, res: Response) => {
   await revokeSparkKey(offeringId, sparkKeyId);
 
   return res.status(204).send();
+};
+
+// GET /course-offerings/:offeringId/spark/keys/stats
+export const getKeysStats = async (req: Request, res: Response) => {
+  const { userId, isAdmin } = req.user!;
+  const offeringId = parseInt(req.params.offeringId, 10);
+
+  await requireInstructorOrAdmin(userId, isAdmin, offeringId);
+
+  const stats = await getSparkAggregatedKeyStats(offeringId);
+
+  return res.json(stats);
 };
 
 // GET /course-offerings/:offeringId/spark/keys/:sparkKeyId/stats

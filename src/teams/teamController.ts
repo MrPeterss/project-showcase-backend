@@ -181,27 +181,23 @@ export const getTeam = async (req: Request, res: Response) => {
   // Get the appropriate project for this team
   const project = await getTeamProject(teamId);
 
-  // Get all projects with tags for this team to build the tags list
-  const projectsWithTags = await prisma.project.findMany({
+  const projectTagLinks = await prisma.projectOfferingTag.findMany({
     where: {
-      teamId,
-      tag: { not: null },
+      project: { teamId },
     },
-    orderBy: { deployedAt: 'desc' },
-    select: {
-      tag: true,
-      deployedAt: true,
+    include: {
+      offeringTag: true,
     },
+    orderBy: { createdAt: 'desc' },
   });
 
-  // Extract unique tags in order (most recent first)
   const seenTags = new Set<string>();
   const orderedTags: string[] = [];
-  
-  for (const projectWithTag of projectsWithTags) {
-    if (projectWithTag.tag && !seenTags.has(projectWithTag.tag)) {
-      seenTags.add(projectWithTag.tag);
-      orderedTags.push(projectWithTag.tag);
+  for (const link of projectTagLinks) {
+    const name = link.offeringTag.name;
+    if (!seenTags.has(name)) {
+      seenTags.add(name);
+      orderedTags.push(name);
     }
   }
 
