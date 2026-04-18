@@ -34,53 +34,122 @@ export interface SparkTopUser {
   totalTokens: number;
 }
 
+/** Per-key usage within one hourly or daily bucket (for ranking teams/keys in that window). */
+export interface SparkBucketKeyContribution {
+  keyId: number;
+  /** Spark key description (typically `"{teamName} ({scope})"`). */
+  description: string;
+  count: number;
+  totalTokens: number;
+}
+
+export interface SparkAggregatedHourlyBlock {
+  hour: string;
+  count: number;
+  totalTokens: number;
+  /** Highest-usage keys in this hour (by `totalTokens`, then `count`). */
+  topKeys: SparkBucketKeyContribution[];
+}
+
+export interface SparkAggregatedDailyBlock {
+  date: string;
+  count: number;
+  totalTokens: number;
+  /** Highest-usage keys on this day (by `totalTokens`, then `count`). */
+  topKeys: SparkBucketKeyContribution[];
+}
+
 /** Combined stats for every Spark key in a course offering (same buckets as single-key stats). */
 export interface SparkAggregatedKeysStats {
   keyIds: number[];
   totalRequests: number;
   totalTokens: number;
   lastUsedAt: string | null;
-  hourly: { hour: string; count: number; totalTokens: number }[];
-  daily: { date: string; count: number; totalTokens: number }[];
+  hourly: SparkAggregatedHourlyBlock[];
+  daily: SparkAggregatedDailyBlock[];
   topUsers: SparkTopUser[];
 }
 
 type SparkStatsResponse = SparkStats & { topUsers?: SparkTopUser[] };
 
-const mergeHourlySeries = (
-  series: { hour: string; count: number; totalTokens: number }[][],
-): { hour: string; count: number; totalTokens: number }[] => {
-  const combined = new Map<string, { count: number; totalTokens: number }>();
-  for (const arr of series) {
-    for (const row of arr) {
-      const prev = combined.get(row.hour) ?? { count: 0, totalTokens: 0 };
-      combined.set(row.hour, {
-        count: prev.count + row.count,
-        totalTokens: prev.totalTokens + row.totalTokens,
+const TOP_KEYS_PER_BUCKET = 10;
+
+const buildHourlyBlocksWithTopKeys = (
+  keys: SparkKey[],
+  perKey: SparkStatsResponse[],
+): SparkAggregatedHourlyBlock[] => {
+  const byHour = new Map<string, Map<number, SparkBucketKeyContribution>>();
+  for (let i = 0; i < keys.length; i++) {
+    const sparkKey = keys[i];
+    for (const row of perKey[i].hourly) {
+      let m = byHour.get(row.hour);
+      if (!m) {
+        m = new Map();
+        byHour.set(row.hour, m);
+      }
+      m.set(sparkKey.id, {
+        keyId: sparkKey.id,
+        description: sparkKey.description,
+        count: row.count,
+        totalTokens: row.totalTokens,
       });
     }
   }
-  return [...combined.entries()]
+  return [...byHour.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([hour, v]) => ({ hour, ...v }));
+    .map(([hour, keyMap]) => {
+      const contributions = [...keyMap.values()];
+      const count = contributions.reduce((s, c) => s + c.count, 0);
+      const totalTokens = contributions.reduce((s, c) => s + c.totalTokens, 0);
+      const topKeys = [...contributions]
+        .sort(
+          (a, b) =>
+            b.totalTokens - a.totalTokens ||
+            b.count - a.count ||
+            a.keyId - b.keyId,
+        )
+        .slice(0, TOP_KEYS_PER_BUCKET);
+      return { hour, count, totalTokens, topKeys };
+    });
 };
 
-const mergeDailySeries = (
-  series: { date: string; count: number; totalTokens: number }[][],
-): { date: string; count: number; totalTokens: number }[] => {
-  const combined = new Map<string, { count: number; totalTokens: number }>();
-  for (const arr of series) {
-    for (const row of arr) {
-      const prev = combined.get(row.date) ?? { count: 0, totalTokens: 0 };
-      combined.set(row.date, {
-        count: prev.count + row.count,
-        totalTokens: prev.totalTokens + row.totalTokens,
+const buildDailyBlocksWithTopKeys = (
+  keys: SparkKey[],
+  perKey: SparkStatsResponse[],
+): SparkAggregatedDailyBlock[] => {
+  const byDate = new Map<string, Map<number, SparkBucketKeyContribution>>();
+  for (let i = 0; i < keys.length; i++) {
+    const sparkKey = keys[i];
+    for (const row of perKey[i].daily) {
+      let m = byDate.get(row.date);
+      if (!m) {
+        m = new Map();
+        byDate.set(row.date, m);
+      }
+      m.set(sparkKey.id, {
+        keyId: sparkKey.id,
+        description: sparkKey.description,
+        count: row.count,
+        totalTokens: row.totalTokens,
       });
     }
   }
-  return [...combined.entries()]
+  return [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, ...v }));
+    .map(([date, keyMap]) => {
+      const contributions = [...keyMap.values()];
+      const count = contributions.reduce((s, c) => s + c.count, 0);
+      const totalTokens = contributions.reduce((s, c) => s + c.totalTokens, 0);
+      const topKeys = [...contributions]
+        .sort(
+          (a, b) =>
+            b.totalTokens - a.totalTokens ||
+            b.count - a.count ||
+            a.keyId - b.keyId,
+        )
+        .slice(0, TOP_KEYS_PER_BUCKET);
+      return { date, count, totalTokens, topKeys };
+    });
 };
 
 const mergeTopUsers = (
@@ -353,8 +422,8 @@ export const getSparkAggregatedKeyStats = async (
     totalRequests: perKey.reduce((s, x) => s + x.totalRequests, 0),
     totalTokens: perKey.reduce((s, x) => s + x.totalTokens, 0),
     lastUsedAt: maxIsoDate(perKey.map((x) => x.lastUsedAt)),
-    hourly: mergeHourlySeries(perKey.map((x) => x.hourly)),
-    daily: mergeDailySeries(perKey.map((x) => x.daily)),
+    hourly: buildHourlyBlocksWithTopKeys(keys, perKey),
+    daily: buildDailyBlocksWithTopKeys(keys, perKey),
     topUsers: mergeTopUsers(
       perKey.map((x) => x.topUsers),
       10,
