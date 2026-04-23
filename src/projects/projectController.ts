@@ -295,7 +295,11 @@ export const deployProjectWithStreamingController = async (
 
   const taskId = makeQueueTaskId(teamId);
 
-  req.on('close', () => {
+  // Use `res`, not `req`, for disconnect detection. For POST, `req` can emit
+  // `close` as soon as the request body is fully read (e.g. after multer
+  // finishes), while the response is still streaming. That would set
+  // `clientClosed` too early and drop all subsequent SSE writes.
+  const onClientDisconnected = () => {
     clientClosed = true;
     buildQueue.cancel(taskId);
     if (activeBuildStream?.destroy) {
@@ -305,7 +309,10 @@ export const deployProjectWithStreamingController = async (
         // Best-effort cleanup.
       }
     }
-  });
+  };
+
+  res.on('close', onClientDisconnected);
+  req.on('aborted', onClientDisconnected);
 
   try {
     await buildQueue.enqueue({
