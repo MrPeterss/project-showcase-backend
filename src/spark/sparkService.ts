@@ -17,6 +17,7 @@ export interface SparkKey {
 
 export interface SparkStats {
   keyId: number;
+  key?: string;
   totalRequests: number;
   totalTokens: number;
   lastUsedAt: string | null;
@@ -409,12 +410,27 @@ export const getSparkAggregatedKeyStats = async (
     };
   }
 
-  const perKey = await Promise.all(
-    keys.map((k) =>
-      callSparkApi<SparkStatsResponse>(
-        `/api/stats?key=${encodeURIComponent(k.key)}`,
-      ),
-    ),
+  const { stats } = await callSparkApi<{ stats: SparkStatsResponse[] }>(
+    '/api/stats/batch',
+    {
+      method: 'POST',
+      body: JSON.stringify({ keys: keys.map((k) => k.key) }),
+    },
+  );
+
+  // Batch results may arrive in any order; re-align with the keys array by key string.
+  const statsByKey = new Map(stats.map((s) => [s.key, s]));
+  const perKey = keys.map(
+    (k): SparkStatsResponse =>
+      statsByKey.get(k.key) ?? {
+        keyId: k.id,
+        key: k.key,
+        totalRequests: 0,
+        totalTokens: 0,
+        lastUsedAt: null,
+        hourly: [],
+        daily: [],
+      },
   );
 
   return {
