@@ -13,16 +13,7 @@ import {
   deployWithStreaming,
   deployFromProject,
 } from './projectService.js';
-import { buildQueue } from './buildQueue.js';
 import { docker } from '../docker.js';
-
-/**
- * Generate a unique id for a build queue entry. Used to cancel queued entries
- * when the client disconnects.
- */
-const makeQueueTaskId = (teamId: number | string): string => {
-  return `team-${teamId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-};
 
 export const getRunningContainers = async (_req: Request, res: Response) => {
   const containers = await listRunningContainers();
@@ -40,37 +31,7 @@ export const deployProject = async (req: Request, res: Response) => {
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
 
-  // Route through the build queue so we don't exceed MAX_CONCURRENT_BUILDS.
-  // This endpoint has no stream to report position to, so callers just wait.
-  let result: Awaited<ReturnType<typeof deploy>> | undefined;
-  let deployError: unknown;
-
-  await buildQueue.enqueue({
-    id: makeQueueTaskId(teamId),
-    onPositionUpdate: () => {
-      // No-op: non-streaming endpoint cannot push updates to the client.
-    },
-    onStart: () => {
-      // No-op: non-streaming endpoint has no channel for build-start events.
-    },
-    run: async () => {
-      try {
-        result = await deploy(
-          Number(teamId),
-          githubUrl,
-          userId,
-          buildArgs,
-          dataFilePath,
-          originalFileName,
-          extraEnvVars,
-        );
-      } catch (error) {
-        deployError = error;
-      }
-    },
-  });
-
-  if (deployError) throw deployError;
+  const result = await deploy(Number(teamId), githubUrl, userId, buildArgs, dataFilePath, originalFileName, extraEnvVars);
 
   return res.status(201).json({
     message: 'Project deployed successfully',
@@ -269,125 +230,94 @@ export const deployProjectWithStreamingController = async (
   const dataFilePath = req.file?.path;
   const originalFileName = req.file?.originalname;
 
-  // Set SSE headers up front so we can stream queue-position updates before
-  // the Docker build actually starts.
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-  if (typeof res.flushHeaders === 'function') {
-    res.flushHeaders();
-  }
-
-  let clientClosed = false;
-  let activeBuildStream: { destroy?: () => void } | null = null;
-
-  const writeSse = (payload: unknown): void => {
-    if (clientClosed || res.writableEnded) return;
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
-  };
-
-  // Emit queue messages as plain log lines so the existing frontend renders
-  // them alongside regular build output without any changes.
-  const writeLog = (line: string): void => {
-    writeSse({ type: 'log', data: line });
-  };
-
-  const taskId = makeQueueTaskId(teamId);
-
-  req.on('close', () => {
-    clientClosed = true;
-    buildQueue.cancel(taskId);
-    if (activeBuildStream?.destroy) {
-      try {
-        activeBuildStream.destroy();
-      } catch {
-        // Best-effort cleanup.
-      }
-    }
-  });
-
   try {
-    await buildQueue.enqueue({
-      id: taskId,
-      onPositionUpdate: (position, totalQueued) => {
-        writeLog(
-          `[queue] Waiting for an available build slot: position ${position} of ${totalQueued} ` +
-            `(max ${buildQueue.getMaxConcurrent()} concurrent builds).\n`,
-        );
-      },
-      onStart: () => {
-        writeLog('[queue] A build slot is now available. Starting build...\n');
-      },
-      run: async () => {
-        if (clientClosed) return;
+    const { project, initBuild, completeBuild } = await deployWithStreaming(
+      Number(teamId),
+      githubUrl,
+      userId,
+      buildArgs,
+      dataFilePath,
+      originalFileName,
+      extraEnvVars,
+    );
 
-        const { project, initBuild, completeBuild } = await deployWithStreaming(
-          Number(teamId),
-          githubUrl,
-          userId,
-          buildArgs,
-          dataFilePath,
-          originalFileName,
-          extraEnvVars,
-        );
+    // Set headers for Server-Sent Events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
-        writeSse({ type: 'start', project });
+    // Send initial project info
+    res.write(
+      `data: ${JSON.stringify({ type: 'start', project })}\n\n`,
+    );
 
-        const buildStream = await initBuild();
-        activeBuildStream = buildStream as { destroy?: () => void };
-        const buildLogLines: string[] = [];
+    // Initialize the build and get the stream
+    const buildStream = await initBuild();
+    const buildLogLines: string[] = [];
 
-        await new Promise<void>((resolve) => {
-          docker.modem.followProgress(
-            buildStream,
-            async (err, _result) => {
-              if (err) {
-                writeSse({ type: 'error', message: err.message });
-                if (!clientClosed && !res.writableEnded) res.end();
-                resolve();
-                return;
-              }
-
-              try {
-                const updatedProject = await completeBuild(buildLogLines);
-                writeSse({ type: 'complete', project: updatedProject });
-              } catch (completeError) {
-                writeSse({
-                  type: 'error',
-                  message: (completeError as Error).message,
-                });
-              } finally {
-                if (!clientClosed && !res.writableEnded) res.end();
-                resolve();
-              }
-            },
-            (event) => {
-              let logLine = '';
-
-              if (event.stream) {
-                logLine = event.stream;
-              } else if (event.status) {
-                logLine = `${event.status}${event.progress ? ` ${event.progress}` : ''}\n`;
-              } else if (event.error) {
-                logLine = `ERROR: ${event.error}\n`;
-              }
-
-              if (logLine) {
-                buildLogLines.push(logLine);
-                writeSse({ type: 'log', data: logLine });
-              }
-            },
+    // Follow the build progress and stream events to client
+    docker.modem.followProgress(
+      buildStream,
+      async (err, _result) => {
+        if (err) {
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`,
           );
-        });
+          res.end();
+          return;
+        }
+
+        // Build completed successfully, now start the container
+        try {
+          const updatedProject = await completeBuild(buildLogLines);
+          res.write(
+            `data: ${JSON.stringify({ type: 'complete', project: updatedProject })}\n\n`,
+          );
+          res.end();
+        } catch (completeError) {
+          res.write(
+            `data: ${JSON.stringify({ type: 'error', message: (completeError as Error).message })}\n\n`,
+          );
+          res.end();
+        }
       },
+      (event) => {
+        // Stream each build event to the client in real-time
+        let logLine = '';
+        
+        if (event.stream) {
+          logLine = event.stream;
+        } else if (event.status) {
+          logLine = `${event.status}${event.progress ? ` ${event.progress}` : ''}\n`;
+        } else if (event.error) {
+          logLine = `ERROR: ${event.error}\n`;
+        }
+
+        if (logLine) {
+          buildLogLines.push(logLine);
+          res.write(
+            `data: ${JSON.stringify({ type: 'log', data: logLine })}\n\n`,
+          );
+        }
+      },
+    );
+
+    // Handle client disconnect
+    req.on('close', () => {
+      if ('destroy' in buildStream && typeof buildStream.destroy === 'function') {
+        buildStream.destroy();
+      }
     });
   } catch (error) {
     if (!res.headersSent) {
       throw error;
+    } else {
+      res.write(
+        `data: ${JSON.stringify({ type: 'error', message: (error as Error).message })}\n\n`,
+      );
+      res.end();
     }
-    writeSse({ type: 'error', message: (error as Error).message });
-    if (!res.writableEnded) res.end();
   }
 };
 
