@@ -343,7 +343,18 @@ export const deploy = async (
 
   try {
     // Clone the repository
-    await git.clone(githubUrl, tempDir);
+    await git.clone(githubUrl, tempDir, ['--depth', '1']);
+
+    // Exclude .git from the Docker build context
+    const dockerIgnorePath = path.join(tempDir, '.dockerignore');
+    if (!fs.existsSync(dockerIgnorePath)) {
+      fs.writeFileSync(dockerIgnorePath, '.git\n');
+    } else {
+      const existing = fs.readFileSync(dockerIgnorePath, 'utf-8');
+      if (!existing.split('\n').some((line) => line.trim() === '.git')) {
+        fs.appendFileSync(dockerIgnorePath, '\n.git\n');
+      }
+    }
 
     // Build the image (use team name for image name)
     const imageName = `${normalizeContainerName(team.name)}:latest`;
@@ -917,7 +928,18 @@ export const deployWithStreaming = async (
       await ensureProjectsNetwork();
 
       // Clone the repository
-      await git.clone(githubUrl, tempDir);
+      await git.clone(githubUrl, tempDir, ['--depth', '1']);
+
+      // Exclude .git from the Docker build context
+      const dockerIgnorePath = path.join(tempDir, '.dockerignore');
+      if (!fs.existsSync(dockerIgnorePath)) {
+        fs.writeFileSync(dockerIgnorePath, '.git\n');
+      } else {
+        const existing = fs.readFileSync(dockerIgnorePath, 'utf-8');
+        if (!existing.split('\n').some((line) => line.trim() === '.git')) {
+          fs.appendFileSync(dockerIgnorePath, '\n.git\n');
+        }
+      }
 
       // Build the image and get the stream
       const buildOptions: Record<string, unknown> = {
