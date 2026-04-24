@@ -4,7 +4,7 @@ import * as path from 'path';
 import { EnvironmentScope } from '@prisma/client';
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { docker } from '../docker.js';
-import { git } from '../git.js';
+import { simpleGit } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
 
@@ -342,8 +342,8 @@ export const deploy = async (
   });
 
   try {
-    // Clone the repository
-    await git.clone(githubUrl, tempDir, ['--depth', '1']);
+    // Shallow clone — only the tip commit needed.
+    await simpleGit().clone(githubUrl, tempDir, ['--depth', '1']);
 
     // Exclude .git from the Docker build context
     const dockerIgnorePath = path.join(tempDir, '.dockerignore');
@@ -865,10 +865,12 @@ export const deployWithStreaming = async (
     },
   });
 
-  // This will be populated with the actual docker build stream
-  const initBuild = async () => {
+  // onProgress receives plain log-line strings forwarded to the SSE stream
+  // before Docker build events start arriving.
+  const initBuild = async (onProgress?: (msg: string) => void) => {
     try {
       // Find and stop any running projects for this team
+      onProgress?.('[build] Stopping existing containers...\n');
       const runningProjects = await prisma.project.findMany({
         where: {
           teamId,
@@ -927,10 +929,20 @@ export const deployWithStreaming = async (
       // Ensure the projects network exists
       await ensureProjectsNetwork();
 
-      // Clone the repository
-      await git.clone(githubUrl, tempDir, ['--depth', '1']);
+      // Shallow clone with real-time progress forwarded to the SSE stream.
+      onProgress?.(`[build] Cloning ${githubUrl} (depth=1)...\n`);
+      const gitInstance = simpleGit({
+        progress: ({ method, stage, progress }) => {
+          if (stage) {
+            onProgress?.(`[git] ${method} | ${stage}: ${progress}%\n`);
+          }
+        },
+      });
+      await gitInstance.clone(githubUrl, tempDir, ['--depth', '1']);
+      onProgress?.('[build] Clone complete.\n');
 
-      // Exclude .git from the Docker build context
+      // Ensure .git is excluded from the Docker build context so the daemon
+      // never has to hash it when computing COPY layer cache keys.
       const dockerIgnorePath = path.join(tempDir, '.dockerignore');
       if (!fs.existsSync(dockerIgnorePath)) {
         fs.writeFileSync(dockerIgnorePath, '.git\n');
@@ -942,6 +954,7 @@ export const deployWithStreaming = async (
       }
 
       // Build the image and get the stream
+      onProgress?.('[build] Sending build context to Docker daemon...\n');
       const buildOptions: Record<string, unknown> = {
         t: imageName,
       };

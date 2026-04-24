@@ -329,64 +329,74 @@ export const deployProjectWithStreamingController = async (
       run: async () => {
         if (clientClosed) return;
 
-        const { project, initBuild, completeBuild } = await deployWithStreaming(
-          Number(teamId),
-          githubUrl,
-          userId,
-          buildArgs,
-          dataFilePath,
-          originalFileName,
-          extraEnvVars,
-        );
+        // Heartbeat so intermediaries don't drop the connection during
+        // silent phases (clone, container teardown, context upload, etc.).
+        const pingInterval = setInterval(() => {
+          writeSse({ type: 'ping' });
+        }, 20_000);
 
-        writeSse({ type: 'start', project });
-
-        const buildStream = await initBuild();
-        activeBuildStream = buildStream as { destroy?: () => void };
-        const buildLogLines: string[] = [];
-
-        await new Promise<void>((resolve) => {
-          docker.modem.followProgress(
-            buildStream,
-            async (err, _result) => {
-              if (err) {
-                writeSse({ type: 'error', message: err.message });
-                if (!clientClosed && !res.writableEnded) res.end();
-                resolve();
-                return;
-              }
-
-              try {
-                const updatedProject = await completeBuild(buildLogLines);
-                writeSse({ type: 'complete', project: updatedProject });
-              } catch (completeError) {
-                writeSse({
-                  type: 'error',
-                  message: (completeError as Error).message,
-                });
-              } finally {
-                if (!clientClosed && !res.writableEnded) res.end();
-                resolve();
-              }
-            },
-            (event) => {
-              let logLine = '';
-
-              if (event.stream) {
-                logLine = event.stream;
-              } else if (event.status) {
-                logLine = `${event.status}${event.progress ? ` ${event.progress}` : ''}\n`;
-              } else if (event.error) {
-                logLine = `ERROR: ${event.error}\n`;
-              }
-
-              if (logLine) {
-                buildLogLines.push(logLine);
-                writeSse({ type: 'log', data: logLine });
-              }
-            },
+        try {
+          const { project, initBuild, completeBuild } = await deployWithStreaming(
+            Number(teamId),
+            githubUrl,
+            userId,
+            buildArgs,
+            dataFilePath,
+            originalFileName,
+            extraEnvVars,
           );
-        });
+
+          writeSse({ type: 'start', project });
+
+          const buildStream = await initBuild(writeLog);
+          activeBuildStream = buildStream as { destroy?: () => void };
+          const buildLogLines: string[] = [];
+
+          await new Promise<void>((resolve) => {
+            docker.modem.followProgress(
+              buildStream,
+              async (err, _result) => {
+                if (err) {
+                  writeSse({ type: 'error', message: err.message });
+                  if (!clientClosed && !res.writableEnded) res.end();
+                  resolve();
+                  return;
+                }
+
+                try {
+                  const updatedProject = await completeBuild(buildLogLines);
+                  writeSse({ type: 'complete', project: updatedProject });
+                } catch (completeError) {
+                  writeSse({
+                    type: 'error',
+                    message: (completeError as Error).message,
+                  });
+                } finally {
+                  if (!clientClosed && !res.writableEnded) res.end();
+                  resolve();
+                }
+              },
+              (event) => {
+                let logLine = '';
+
+                if (event.stream) {
+                  logLine = event.stream;
+                } else if (event.status) {
+                  logLine = `${event.status}${event.progress ? ` ${event.progress}` : ''}\n`;
+                } else if (event.error) {
+                  logLine = `ERROR: ${event.error}\n`;
+                }
+
+                if (logLine) {
+                  buildLogLines.push(logLine);
+                  writeSse({ type: 'log', data: logLine });
+                }
+              },
+            );
+          });
+        } finally {
+          clearInterval(pingInterval);
+        }
       },
     });
   } catch (error) {
