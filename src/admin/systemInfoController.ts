@@ -6,6 +6,13 @@ const writeSseEvent = (res: Response, event: string, data: unknown) => {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 };
 
+const avg = (values: number[]) =>
+  values.length === 0
+    ? 0
+    : values.reduce((sum, v) => sum + v, 0) / values.length;
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export const streamSystemStats = async (req: Request, res: Response) => {
   // Server-Sent Events (SSE)
   res.status(200);
@@ -20,11 +27,62 @@ export const streamSystemStats = async (req: Request, res: Response) => {
   // Let the client know stream is alive
   writeSseEvent(res, 'ready', { ok: true, timestamp: new Date().toISOString() });
 
-  const intervalMs = 1000;
+  // 1s sampling is very noisy near-idle; use a slightly longer window.
+  const intervalMs = 2000;
+  const smoothingWindow = 5;
+
+  const history = {
+    overall: {
+      currentLoad: [] as number[],
+      user: [] as number[],
+      system: [] as number[],
+      idle: [] as number[],
+    },
+    perCore: [] as Array<{
+      load: number[];
+      user: number[];
+      system: number[];
+      idle: number[];
+    }>,
+  };
+
+  const pushTrim = (arr: number[], value: number) => {
+    arr.push(value);
+    if (arr.length > smoothingWindow) arr.shift();
+  };
 
   const tick = async () => {
     try {
       const [load, mem] = await Promise.all([si.currentLoad(), si.mem()]);
+
+      pushTrim(history.overall.currentLoad, load.currentLoad);
+      pushTrim(history.overall.user, load.currentLoadUser);
+      pushTrim(history.overall.system, load.currentLoadSystem);
+      pushTrim(history.overall.idle, load.currentLoadIdle);
+
+      const perCoreRaw = (load.cpus || []).map((c, idx) => {
+        if (!history.perCore[idx]) {
+          history.perCore[idx] = { load: [], user: [], system: [], idle: [] };
+        }
+        pushTrim(history.perCore[idx].load, c.load);
+        pushTrim(history.perCore[idx].user, c.loadUser);
+        pushTrim(history.perCore[idx].system, c.loadSystem);
+        pushTrim(history.perCore[idx].idle, c.loadIdle);
+
+        return {
+          core: idx,
+          load: c.load, // %
+          user: c.loadUser, // %
+          system: c.loadSystem, // %
+          idle: c.loadIdle, // %
+          smoothed: {
+            load: round2(avg(history.perCore[idx].load)),
+            user: round2(avg(history.perCore[idx].user)),
+            system: round2(avg(history.perCore[idx].system)),
+            idle: round2(avg(history.perCore[idx].idle)),
+          },
+        };
+      });
 
       writeSseEvent(res, 'stats', {
         timestamp: new Date().toISOString(),
@@ -33,13 +91,13 @@ export const streamSystemStats = async (req: Request, res: Response) => {
           user: load.currentLoadUser, // %
           system: load.currentLoadSystem, // %
           idle: load.currentLoadIdle, // %
-          cores: (load.cpus || []).map((c, idx) => ({
-            core: idx,
-            load: c.load, // %
-            user: c.loadUser, // %
-            system: c.loadSystem, // %
-            idle: c.loadIdle, // %
-          })),
+          smoothed: {
+            currentLoad: round2(avg(history.overall.currentLoad)),
+            user: round2(avg(history.overall.user)),
+            system: round2(avg(history.overall.system)),
+            idle: round2(avg(history.overall.idle)),
+          },
+          cores: perCoreRaw,
         },
         memory: {
           total: mem.total,
