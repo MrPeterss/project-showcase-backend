@@ -33,6 +33,13 @@ export const streamSystemStats = async (req: Request, res: Response) => {
           user: load.currentLoadUser, // %
           system: load.currentLoadSystem, // %
           idle: load.currentLoadIdle, // %
+          cores: (load.cpus || []).map((c, idx) => ({
+            core: idx,
+            load: c.load, // %
+            user: c.loadUser, // %
+            system: c.loadSystem, // %
+            idle: c.loadIdle, // %
+          })),
         },
         memory: {
           total: mem.total,
