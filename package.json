@@ -38,6 +38,7 @@
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "simple-git": "^3.30.0",
+    "systeminformation": "^5.31.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {

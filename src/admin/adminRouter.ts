@@ -16,6 +16,7 @@ import {
   triggerPruning,
   updateUserName,
 } from './adminController.js';
+import { getStorageInfo, streamSystemStats } from './systemInfoController.js';
 
 const router = Router();
 
@@ -30,6 +31,10 @@ router.get('/settings', (_req, res) => {
 router.get('/audit-logs', (_req, res) => {
   res.json({ message: 'Admin audit logs endpoint' });
 });
+
+// System info (admin only; protected in server.ts)
+router.get('/system/stream', streamSystemStats);
+router.get('/system/storage', getStorageInfo);
 
 // Resource management route - get all non-pruned projects
 router.get('/resources/projects', getAllProjects);
