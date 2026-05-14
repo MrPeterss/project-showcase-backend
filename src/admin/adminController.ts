@@ -126,7 +126,7 @@ export const backfillTeamAliasesFromRunningProjectsHandler = async (
     return res.json({
       message: dryRun
         ? 'Dry run completed; no database writes performed'
-        : 'Team aliases assigned from team names (same rules as create/rename)',
+        : 'Team aliases assigned: running projects preferred, otherwise from team names',
       ...summary,
     });
   } catch (error) {

@@ -2,6 +2,8 @@ import { prisma } from '../prisma.js';
 import { NotFoundError } from '../utils/AppError.js';
 import {
   baseTeamAliasFromName,
+  deriveAliasSlugFromRunningProject,
+  resolveUniqueAliasSlug,
   resolveUniqueTeamAlias,
 } from '../utils/teamAlias.js';
 
@@ -80,10 +82,12 @@ export const updateUserName = async (userId: number, name: string | null) => {
 export type TeamAliasBackfillItem = {
   teamId: number;
   teamName: string;
-  /** Same base slug as {@link resolveUniqueTeamAlias} / create & rename flows. */
-  nameBaseSlug: string;
+  /** Whether we started from Docker/persisted project slug vs team display name. */
+  source: 'running_project' | 'team_name';
+  /** Candidate base slug before uniqueness (`-2`, …); sanitized. */
+  basisSlug: string;
   allocatedAlias: string;
-  /** Latest running project `id` whose `alias` row was synced, when any; otherwise null. */
+  /** Running project synced when applicable; otherwise null (no active container row). */
   syncedRunningProjectId: number | null;
 };
 
@@ -92,23 +96,23 @@ export type TeamAliasBackfillSummary = {
   totals: {
     eligibleTeamsWithoutAlias: number;
     applied: number;
+    fromRunningProject: number;
+    fromTeamName: number;
   };
   items: TeamAliasBackfillItem[];
 };
 
 /**
- * Assign `Team.alias` for rows where it is still null using the same rules as `createTeamWithMembers`
- * / `updateTeamWithMembers` (sanitized display name plus `-2`, `-3`, … global uniqueness).
- * If the team has a running deployment, `Project.alias` for that row is set to match.
+ * Assign `Team.alias` when null: prefer slug from newest **running** `Project`
+ * (`alias` then `containerName`), falling back to the same sanitized team-name rules as create/rename.
+ * Uniqueness uses global `Team.alias` plus `-2`, `-3`, … (and optional dry-run batch simulation).
  *
- * Dry run: allocates without writing DB; simulates collisions within this batch via an in-memory set
- * alongside existing `Team.alias` rows in the database.
+ * Writes `Project.alias` on the running deployment row when present so it matches the chosen alias.
  */
 export const backfillTeamAliasesFromRunningProjects = async (options?: {
   dryRun?: boolean;
 }) => {
   const dryRun = options?.dryRun === true;
-  /** Simulates uniqueness within this batch while `dryRun` (no commits yet). */
   const simulatedTaken = dryRun ? new Set<string>() : undefined;
 
   const teamsMissingAlias = await prisma.team.findMany({
@@ -118,22 +122,58 @@ export const backfillTeamAliasesFromRunningProjects = async (options?: {
   });
 
   const items: TeamAliasBackfillItem[] = [];
+  let fromRunningProject = 0;
+  let fromTeamName = 0;
 
   for (const team of teamsMissingAlias) {
-    const nameBaseSlug = baseTeamAliasFromName(team.name);
-    const allocatedAlias = await resolveUniqueTeamAlias(
-      prisma,
-      team.name,
-      team.id,
-      simulatedTaken,
-    );
-    simulatedTaken?.add(allocatedAlias);
-
     const runningProject = await prisma.project.findFirst({
       where: { teamId: team.id, status: 'running' },
       orderBy: { deployedAt: 'desc' },
-      select: { id: true },
+      select: { id: true, alias: true, containerName: true },
     });
+
+    let allocatedAlias: string;
+    let source: TeamAliasBackfillItem['source'];
+    let basisSlug: string;
+
+    const nameBasis = baseTeamAliasFromName(team.name);
+
+    if (runningProject) {
+      const fromDocker = deriveAliasSlugFromRunningProject(runningProject);
+      if (fromDocker) {
+        basisSlug = fromDocker;
+        source = 'running_project';
+        allocatedAlias = await resolveUniqueAliasSlug(
+          prisma,
+          fromDocker,
+          team.id,
+          simulatedTaken,
+        );
+        fromRunningProject += 1;
+      } else {
+        basisSlug = nameBasis;
+        source = 'team_name';
+        allocatedAlias = await resolveUniqueTeamAlias(
+          prisma,
+          team.name,
+          team.id,
+          simulatedTaken,
+        );
+        fromTeamName += 1;
+      }
+    } else {
+      basisSlug = nameBasis;
+      source = 'team_name';
+      allocatedAlias = await resolveUniqueTeamAlias(
+        prisma,
+        team.name,
+        team.id,
+        simulatedTaken,
+      );
+      fromTeamName += 1;
+    }
+
+    simulatedTaken?.add(allocatedAlias);
 
     if (!dryRun) {
       await prisma.team.update({
@@ -151,20 +191,21 @@ export const backfillTeamAliasesFromRunningProjects = async (options?: {
     items.push({
       teamId: team.id,
       teamName: team.name,
-      nameBaseSlug,
+      source,
+      basisSlug,
       allocatedAlias,
       syncedRunningProjectId: runningProject?.id ?? null,
     });
   }
 
-  const summary: TeamAliasBackfillSummary = {
+  return {
     dryRun,
     totals: {
       eligibleTeamsWithoutAlias: teamsMissingAlias.length,
       applied: teamsMissingAlias.length,
+      fromRunningProject,
+      fromTeamName,
     },
     items,
-  };
-
-  return summary;
+  } satisfies TeamAliasBackfillSummary;
 };
