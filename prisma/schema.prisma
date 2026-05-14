@@ -74,6 +74,7 @@ model CourseOffering {
 model Team {
   id           Int      @id @default(autoincrement())
   name         String   @unique
+  alias        String?  @unique
   hallOfFame   Boolean  @default(false)
   createdAt    DateTime @default(now())
 
@@ -121,6 +122,7 @@ model TeamMembership {
 
 model Project {
   id                   Int       @id @default(autoincrement())
+  alias                String?
   githubUrl            String
   imageHash            String // Docker image ID/hash (sha256:...)
   tag                  String? // Legacy: last/mirror of tag name for compatibility; use ProjectOfferingTag

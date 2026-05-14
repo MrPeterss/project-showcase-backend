@@ -2,13 +2,7 @@ import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
-
-/**
- * Normalize container name: lowercase and replace spaces with dashes
- */
-const normalizeContainerName = (name: string): string => {
-  return name.toLowerCase().replace(/\s+/g, '-');
-};
+import { dockerDeploymentSlugForTeam } from '../utils/teamAlias.js';
 
 /**
  * Sync legacy Project.tag to a single string for compatibility (most recent link wins by createdAt).
@@ -95,7 +89,7 @@ export const tagCourseOfferingProjects = async (
     }
 
     try {
-      const imageName = normalizeContainerName(team.name);
+      const imageName = dockerDeploymentSlugForTeam(team);
       const image = docker.getImage(preferredProject.imageHash);
 
       try {

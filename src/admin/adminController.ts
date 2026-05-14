@@ -6,15 +6,9 @@ import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
 import { NotFoundError } from '../utils/AppError.js';
+import { dockerDeploymentSlugForTeam } from '../utils/teamAlias.js';
 import * as adminService from './adminService.js';
 import { migrateProjectContainer } from './migrationService.js';
-
-/**
- * Normalize container name: lowercase and replace spaces with dashes
- */
-const normalizeContainerName = (name: string): string => {
-  return name.toLowerCase().replace(/\s+/g, '-');
-};
 
 /** Tag names for Docker labeling (OfferingTag links, else legacy Project.tag). */
 const getProjectTagNamesForDocker = (project: {
@@ -114,6 +108,30 @@ export const migrateProject = async (req: Request, res: Response) => {
     
     return res.status(500).json({
       error: 'Failed to migrate project',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+export const backfillTeamAliasesFromRunningProjectsHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const dryRun = req.body?.dryRun === true;
+    const summary = await adminService.backfillTeamAliasesFromRunningProjects({
+      dryRun,
+    });
+
+    return res.json({
+      message: dryRun
+        ? 'Dry run completed; no database writes performed'
+        : 'Team aliases backfilled from currently running deployments',
+      ...summary,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to backfill team aliases',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
@@ -241,8 +259,8 @@ export const getAllProjects = async (_req: Request, res: Response) => {
       const tagNames = getProjectTagNamesForDocker(project);
       const primaryTag = tagNames[0] ?? null;
       const imageName = primaryTag
-        ? `${normalizeContainerName(project.team.name)}:${primaryTag}`
-        : `${normalizeContainerName(project.team.name)}:latest`;
+        ? `${dockerDeploymentSlugForTeam(project.team)}:${primaryTag}`
+        : `${dockerDeploymentSlugForTeam(project.team)}:latest`;
 
       const imageHash = (project as unknown as { imageHash: string }).imageHash;
 
@@ -632,8 +650,8 @@ export const getContainersByTeam = async (_req: Request, res: Response) => {
         const tagNames = getProjectTagNamesForDocker(project);
         const primaryTag = tagNames[0] ?? null;
         const imageName = primaryTag
-          ? `${normalizeContainerName(project.team.name)}:${primaryTag}`
-          : `${normalizeContainerName(project.team.name)}:latest`;
+          ? `${dockerDeploymentSlugForTeam(project.team)}:${primaryTag}`
+          : `${dockerDeploymentSlugForTeam(project.team)}:latest`;
 
         teamsMap.get(teamId)!.containers.push({
           projectId: project.id,

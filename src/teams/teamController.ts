@@ -33,6 +33,7 @@ const formatMember = <M extends { userId: number; user: { id: number } }>(
 const getTeamProject = async (teamId: number) => {
   return await getTeamPreferredProject(teamId, {
     id: true,
+    alias: true,
     githubUrl: true,
     imageHash: true,
     containerId: true,

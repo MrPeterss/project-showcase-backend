@@ -7,10 +7,9 @@ import { NotFoundError } from '../utils/AppError.js';
 const PROJECTS_NETWORK = 'projects_network';
 
 /**
- * Normalize team name for use as alias: lowercase and replace spaces with dashes
- * Same pattern as normalizeContainerName used elsewhere in the codebase
+ * Legacy admin migration: same as historical behavior when Team.alias is unset.
  */
-const normalizeTeamNameForAlias = (teamName: string): string => {
+const legacyPreferredAliasFromTeamName = (teamName: string): string => {
   return teamName.toLowerCase().replace(/\s+/g, '-');
 };
 
@@ -100,15 +99,15 @@ export const migrateProjectContainer = async (
   // Find team by ID
   const team = await prisma.team.findUnique({
     where: { id: teamId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, alias: true },
   });
   
   if (!team) {
     throw new NotFoundError(`Team with ID ${teamId} not found`);
   }
   
-  // Use team name for alias (normalized)
-  const baseAlias = normalizeTeamNameForAlias(team.name);
+  const preferredBase =
+    team.alias ?? legacyPreferredAliasFromTeamName(team.name);
   
   // Find the container by name
   let container;
@@ -142,8 +141,8 @@ export const migrateProjectContainer = async (
   // Ensure projects network exists
   await ensureProjectsNetwork();
   
-  // Generate unique alias if needed
-  const alias = await generateUniqueAlias(baseAlias);
+  // Generate unique alias on the Docker network if needed
+  const alias = await generateUniqueAlias(preferredBase);
   
   // Check if container is already connected to projects_network
   const networks = containerInfo.NetworkSettings.Networks || {};
@@ -233,6 +232,7 @@ export const migrateProjectContainer = async (
         where: { id: existingProject.id },
         data: {
           containerName: updatedContainerInfo.Name,
+          alias,
           ports: ports as any,
           imageHash: imageHash || existingProject.imageHash,
           githubUrl: githubUrl || existingProject.githubUrl,
@@ -266,6 +266,7 @@ export const migrateProjectContainer = async (
         data: {
           teamId: team.id,
           containerName: updatedContainerInfo.Name,
+          alias,
           ports: ports as any,
           imageHash: imageHash || existingProject.imageHash,
           githubUrl: githubUrl || existingProject.githubUrl,
@@ -304,6 +305,7 @@ export const migrateProjectContainer = async (
       imageHash,
       containerId: container.id,
       containerName: updatedContainerInfo.Name,
+      alias,
       status: isRunning ? 'running' : 'stopped',
       ports: ports as any,
       buildArgs: {},

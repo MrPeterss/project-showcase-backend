@@ -7,6 +7,7 @@ import { docker } from '../docker.js';
 import { simpleGit } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
+import { dockerDeploymentSlugForTeam } from '../utils/teamAlias.js';
 
 // Re-export tag services for backwards compatibility
 export {
@@ -116,13 +117,6 @@ const extractRepoName = (githubUrl: string): string => {
 };
 
 /**
- * Normalize container name: lowercase and replace spaces with dashes
- */
-const normalizeContainerName = (name: string): string => {
-  return name.toLowerCase().replace(/\s+/g, '-');
-};
-
-/**
  * Stop running projects for a team, remove existing container, then create and run a new container.
  * Updates the project record with container info and returns it.
  */
@@ -131,6 +125,8 @@ const runProjectContainer = async (params: {
   projectId: number;
   imageHash: string;
   containerName: string;
+  /** Stored Project.alias (typically matches containerName when team has canonical alias). */
+  projectAlias: string | null;
   extraEnvVars?: Record<string, string>;
   dataFile?: string | null;
   originalDataFileName?: string | null;
@@ -140,6 +136,7 @@ const runProjectContainer = async (params: {
     projectId,
     imageHash,
     containerName,
+    projectAlias,
     extraEnvVars,
     dataFile,
     originalDataFileName,
@@ -199,7 +196,9 @@ const runProjectContainer = async (params: {
     },
     NetworkingConfig: {
       EndpointsConfig: {
-        [PROJECTS_NETWORK]: { Aliases: [containerName] },
+        [PROJECTS_NETWORK]: {
+          Aliases: [containerName],
+        },
       },
     },
   };
@@ -213,6 +212,7 @@ const runProjectContainer = async (params: {
     data: {
       containerId: container.id,
       containerName: containerInfo.Name,
+      alias: projectAlias,
       status: 'running',
       ports: containerInfo.NetworkSettings.Ports,
       deployedAt: new Date(),
@@ -356,8 +356,9 @@ export const deploy = async (
       }
     }
 
-    // Build the image (use team name for image name)
-    const imageName = `${normalizeContainerName(team.name)}:latest`;
+    // Build the image (slug from team alias when present, else normalized name)
+    const imageSlug = dockerDeploymentSlugForTeam(team);
+    const imageName = `${imageSlug}:latest`;
     const buildOptions: Record<string, unknown> = {
       t: imageName,
     };
@@ -413,12 +414,13 @@ export const deploy = async (
       },
     });
 
-    const containerName = normalizeContainerName(team.name);
+    const containerSlug = dockerDeploymentSlugForTeam(team);
     const updatedProject = await runProjectContainer({
       teamId,
       projectId: project.id,
       imageHash,
-      containerName,
+      containerName: containerSlug,
+      projectAlias: containerSlug,
       extraEnvVars,
       dataFile: dataFilePath,
       originalDataFileName: originalFileName,
@@ -845,8 +847,8 @@ export const deployWithStreaming = async (
 
   const repoName = extractRepoName(githubUrl);
   const tempDir = path.join('/tmp', `project-${Date.now()}-${repoName}`);
-  // Use team name for image name
-  const imageName = `${normalizeContainerName(team.name)}:latest`;
+  const deploySlug = dockerDeploymentSlugForTeam(team);
+  const imageName = `${deploySlug}:latest`;
 
   const mergedBuildArgs = await resolveDockerBuildArgs(teamId, buildArgs, extraEnvVars);
 
@@ -910,7 +912,7 @@ export const deployWithStreaming = async (
       }
 
       // Stop and remove existing container with the same name if it exists
-      const containerName = normalizeContainerName(team.name);
+      const containerName = deploySlug;
       
       try {
         const existingContainer = docker.getContainer(containerName);
@@ -999,12 +1001,13 @@ export const deployWithStreaming = async (
         },
       });
 
-      const containerName = normalizeContainerName(team.name);
+      const containerSlug = deploySlug;
       const updatedProject = await runProjectContainer({
         teamId,
         projectId: project.id,
         imageHash,
-        containerName,
+        containerName: containerSlug,
+        projectAlias: containerSlug,
         extraEnvVars,
         dataFile: dataFilePath,
         originalDataFileName: originalFileName,
@@ -1332,13 +1335,14 @@ export const deployFromProject = async (
 
   try {
     const extraEnvVars = (sourceProject.extraEnvVars as Record<string, string>) || {};
-    const containerName = normalizeContainerName(sourceProject.team.name);
+    const containerSlug = dockerDeploymentSlugForTeam(sourceProject.team);
 
     const updatedProject = await runProjectContainer({
       teamId: sourceProject.teamId,
       projectId: newProject.id,
       imageHash: sourceProject.imageHash,
-      containerName,
+      containerName: containerSlug,
+      projectAlias: containerSlug,
       extraEnvVars,
       dataFile: sourceProject.dataFile,
       originalDataFileName: sourceProject.originalDataFileName,

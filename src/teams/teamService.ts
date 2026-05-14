@@ -4,6 +4,7 @@ import { prisma } from '../prisma.js';
 import { cleanupTeamContainers } from '../projects/containerService.js';
 import { ConflictError } from '../utils/AppError.js';
 import { getHighestAccessEnrollment } from '../utils/authorizationHelpers.js';
+import { resolveUniqueTeamAlias } from '../utils/teamAlias.js';
 
 /**
  * Check if a team name already exists (case-insensitive).
@@ -98,6 +99,8 @@ export const createTeamWithMembers = async (
     throw new ConflictError('Team name already exists');
   }
 
+  const alias = await resolveUniqueTeamAlias(prisma, name);
+
   // Ensure all members are enrolled
   const memberUserIds = await ensureUsersEnrolled(memberEmails, courseOfferingId);
 
@@ -105,6 +108,7 @@ export const createTeamWithMembers = async (
   const team = await prisma.team.create({
     data: {
       name,
+      alias,
       courseOfferingId,
       members: {
         create: memberUserIds.map((userId) => ({
@@ -165,11 +169,17 @@ export const updateTeamWithMembers = async (
     memberUserIds = await ensureUsersEnrolled(memberEmails, team.courseOfferingId);
   }
 
+  let newAlias: string | undefined;
+  if (name && name.toLowerCase().trim() !== team.name.toLowerCase().trim()) {
+    newAlias = await resolveUniqueTeamAlias(prisma, name, teamId);
+  }
+
   // Update team
   const updatedTeam = await prisma.team.update({
     where: { id: teamId },
     data: {
       ...(name && { name }),
+      ...(newAlias !== undefined && { alias: newAlias }),
       ...(hallOfFame !== undefined && { hallOfFame }),
       ...(memberUserIds && {
         members: {
