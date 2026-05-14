@@ -1,9 +1,9 @@
 import { prisma } from '../prisma.js';
-import {
-  deriveAliasSlugFromRunningProject,
-  resolveUniqueAliasSlug,
-} from '../utils/teamAlias.js';
 import { NotFoundError } from '../utils/AppError.js';
+import {
+  baseTeamAliasFromName,
+  resolveUniqueTeamAlias,
+} from '../utils/teamAlias.js';
 
 export const promoteUserToAdmin = async (userId: number) => {
   const user = await prisma.user.findUnique({
@@ -77,41 +77,39 @@ export const updateUserName = async (userId: number, name: string | null) => {
   return updatedUser;
 };
 
-export type TeamAliasBackfillItem =
-  | {
-      teamId: number;
-      teamName: string;
-      projectId: number;
-      inferredBaseSlug: string;
-      allocatedAlias: string;
-    }
-  | {
-      teamId: number;
-      teamName: string;
-      skipped: true;
-      reason: 'no_running_project' | 'undeterminable_slug';
-    };
+export type TeamAliasBackfillItem = {
+  teamId: number;
+  teamName: string;
+  /** Same base slug as {@link resolveUniqueTeamAlias} / create & rename flows. */
+  nameBaseSlug: string;
+  allocatedAlias: string;
+  /** Latest running project `id` whose `alias` row was synced, when any; otherwise null. */
+  syncedRunningProjectId: number | null;
+};
 
 export type TeamAliasBackfillSummary = {
   dryRun: boolean;
   totals: {
     eligibleTeamsWithoutAlias: number;
     applied: number;
-    skippedNoRunningProject: number;
-    skippedUndeterminableSlug: number;
   };
   items: TeamAliasBackfillItem[];
 };
 
 /**
- * For teams missing `alias`, use the team's newest running project's DNS/container slug,
- * allocating numeric suffixes (`-2`, …) against `Team.alias` if needed.
- * Updates the team's running deployment row `Project.alias` to match when not dry-running.
+ * Assign `Team.alias` for rows where it is still null using the same rules as `createTeamWithMembers`
+ * / `updateTeamWithMembers` (sanitized display name plus `-2`, `-3`, … global uniqueness).
+ * If the team has a running deployment, `Project.alias` for that row is set to match.
+ *
+ * Dry run: allocates without writing DB; simulates collisions within this batch via an in-memory set
+ * alongside existing `Team.alias` rows in the database.
  */
 export const backfillTeamAliasesFromRunningProjects = async (options?: {
   dryRun?: boolean;
 }) => {
   const dryRun = options?.dryRun === true;
+  /** Simulates uniqueness within this batch while `dryRun` (no commits yet). */
+  const simulatedTaken = dryRun ? new Set<string>() : undefined;
 
   const teamsMissingAlias = await prisma.team.findMany({
     where: { alias: null },
@@ -120,64 +118,42 @@ export const backfillTeamAliasesFromRunningProjects = async (options?: {
   });
 
   const items: TeamAliasBackfillItem[] = [];
-  let applied = 0;
-  let skippedNoRunningProject = 0;
-  let skippedUndeterminableSlug = 0;
 
   for (const team of teamsMissingAlias) {
-    const project = await prisma.project.findFirst({
+    const nameBaseSlug = baseTeamAliasFromName(team.name);
+    const allocatedAlias = await resolveUniqueTeamAlias(
+      prisma,
+      team.name,
+      team.id,
+      simulatedTaken,
+    );
+    simulatedTaken?.add(allocatedAlias);
+
+    const runningProject = await prisma.project.findFirst({
       where: { teamId: team.id, status: 'running' },
       orderBy: { deployedAt: 'desc' },
-      select: { id: true, alias: true, containerName: true },
+      select: { id: true },
     });
-
-    if (!project) {
-      skippedNoRunningProject += 1;
-      items.push({
-        teamId: team.id,
-        teamName: team.name,
-        skipped: true,
-        reason: 'no_running_project',
-      });
-      continue;
-    }
-
-    const inferredBaseSlug = deriveAliasSlugFromRunningProject(project);
-    if (!inferredBaseSlug) {
-      skippedUndeterminableSlug += 1;
-      items.push({
-        teamId: team.id,
-        teamName: team.name,
-        skipped: true,
-        reason: 'undeterminable_slug',
-      });
-      continue;
-    }
-
-    const allocatedAlias = await resolveUniqueAliasSlug(
-      prisma,
-      inferredBaseSlug,
-      team.id,
-    );
 
     if (!dryRun) {
       await prisma.team.update({
         where: { id: team.id },
         data: { alias: allocatedAlias },
       });
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { alias: allocatedAlias },
-      });
+      if (runningProject) {
+        await prisma.project.update({
+          where: { id: runningProject.id },
+          data: { alias: allocatedAlias },
+        });
+      }
     }
 
-    applied += 1;
     items.push({
       teamId: team.id,
       teamName: team.name,
-      projectId: project.id,
-      inferredBaseSlug,
+      nameBaseSlug,
       allocatedAlias,
+      syncedRunningProjectId: runningProject?.id ?? null,
     });
   }
 
@@ -185,9 +161,7 @@ export const backfillTeamAliasesFromRunningProjects = async (options?: {
     dryRun,
     totals: {
       eligibleTeamsWithoutAlias: teamsMissingAlias.length,
-      applied,
-      skippedNoRunningProject,
-      skippedUndeterminableSlug,
+      applied: teamsMissingAlias.length,
     },
     items,
   };

@@ -27,10 +27,16 @@ async function allocateUniqueAliasForTeamColumn(
   db: Db,
   base: string,
   excludeTeamId?: number,
+  blockedAliases?: ReadonlySet<string>,
 ): Promise<string> {
   let candidate = base;
   let n = 2;
   while (n < 10000) {
+    if (blockedAliases?.has(candidate)) {
+      candidate = `${base}-${n}`;
+      n += 1;
+      continue;
+    }
     const existing = await db.team.findFirst({
       where: {
         alias: candidate,
@@ -50,16 +56,19 @@ async function allocateUniqueAliasForTeamColumn(
 
 /**
  * Pick a globally unique Team.alias (`base`, `base-2`, …). SQLite UNIQUE allows multiple nulls for legacy rows.
+ * Pass `blockedAliases` for dry-run batch simulation (already-claimed aliases in memory).
  */
 export async function resolveUniqueTeamAlias(
   db: Db,
   teamName: string,
   excludeTeamId?: number,
+  blockedAliases?: ReadonlySet<string>,
 ): Promise<string> {
   return allocateUniqueAliasForTeamColumn(
     db,
     baseTeamAliasFromName(teamName),
     excludeTeamId,
+    blockedAliases,
   );
 }
 
@@ -70,9 +79,15 @@ export async function resolveUniqueAliasSlug(
   db: Db,
   rawSlugCandidate: string,
   excludeTeamId?: number,
+  blockedAliases?: ReadonlySet<string>,
 ): Promise<string> {
   const base = sanitizeTeamNameForAliasSegment(rawSlugCandidate);
-  return allocateUniqueAliasForTeamColumn(db, base, excludeTeamId);
+  return allocateUniqueAliasForTeamColumn(
+    db,
+    base,
+    excludeTeamId,
+    blockedAliases,
+  );
 }
 
 /**
