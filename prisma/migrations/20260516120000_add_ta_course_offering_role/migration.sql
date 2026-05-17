@@ -1,0 +1,2 @@
+-- SQLite stores CourseOfferingEnrollment.role as TEXT; TA is enforced by the application layer.
+-- No table changes required for the new CourseOfferingRole variant.

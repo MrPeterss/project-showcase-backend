@@ -2,14 +2,12 @@ import { Router } from 'express';
 
 import { validateRequest } from '../middleware/validateRequest.js';
 import {
-  backfillTeamAliasesSchema,
   migrateProjectSchema,
   projectIdParamsSchema,
   updateUserNameSchema,
   userIdParamsSchema,
 } from './admin.schema.js';
 import {
-  backfillTeamAliasesFromRunningProjectsHandler,
   demoteUser,
   getAllProjects,
   migrateProject,
@@ -64,12 +62,6 @@ router.post(
   '/projects/migrate',
   validateRequest(migrateProjectSchema),
   migrateProject,
-);
-
-router.post(
-  '/teams/backfill-aliases',
-  validateRequest(backfillTeamAliasesSchema),
-  backfillTeamAliasesFromRunningProjectsHandler,
 );
 
 export default router;

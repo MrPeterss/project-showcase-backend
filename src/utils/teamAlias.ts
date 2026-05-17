@@ -27,16 +27,10 @@ async function allocateUniqueAliasForTeamColumn(
   db: Db,
   base: string,
   excludeTeamId?: number,
-  blockedAliases?: ReadonlySet<string>,
 ): Promise<string> {
   let candidate = base;
   let n = 2;
   while (n < 10000) {
-    if (blockedAliases?.has(candidate)) {
-      candidate = `${base}-${n}`;
-      n += 1;
-      continue;
-    }
     const existing = await db.team.findFirst({
       where: {
         alias: candidate,
@@ -56,58 +50,17 @@ async function allocateUniqueAliasForTeamColumn(
 
 /**
  * Pick a globally unique Team.alias (`base`, `base-2`, …). SQLite UNIQUE allows multiple nulls for legacy rows.
- * Pass `blockedAliases` for dry-run batch simulation (already-claimed aliases in memory).
  */
 export async function resolveUniqueTeamAlias(
   db: Db,
   teamName: string,
   excludeTeamId?: number,
-  blockedAliases?: ReadonlySet<string>,
 ): Promise<string> {
   return allocateUniqueAliasForTeamColumn(
     db,
     baseTeamAliasFromName(teamName),
     excludeTeamId,
-    blockedAliases,
   );
-}
-
-/**
- * Same uniqueness rules as {@link resolveUniqueTeamAlias}, but `rawSlugCandidate` comes from Docker / Project (e.g. backfill).
- */
-export async function resolveUniqueAliasSlug(
-  db: Db,
-  rawSlugCandidate: string,
-  excludeTeamId?: number,
-  blockedAliases?: ReadonlySet<string>,
-): Promise<string> {
-  const base = sanitizeTeamNameForAliasSegment(rawSlugCandidate);
-  return allocateUniqueAliasForTeamColumn(
-    db,
-    base,
-    excludeTeamId,
-    blockedAliases,
-  );
-}
-
-/**
- * Best-effort slug from a team's currently running deployment row (persisted DNS alias preferred).
- */
-export function deriveAliasSlugFromRunningProject(project: {
-  alias: string | null;
-  containerName: string | null;
-}): string | null {
-  if (project.alias?.trim()) {
-    const s = sanitizeTeamNameForAliasSegment(project.alias);
-    return s || null;
-  }
-  const name = project.containerName?.trim();
-  if (!name) {
-    return null;
-  }
-  const trimmed = name.startsWith('/') ? name.slice(1) : name;
-  const s = sanitizeTeamNameForAliasSegment(trimmed);
-  return s || null;
 }
 
 /**

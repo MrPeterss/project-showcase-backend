@@ -5,7 +5,7 @@ import { prisma } from '../prisma.js';
 
 /**
  * Get enrollment with highest access level for a user in a course offering.
- * Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
+ * Role hierarchy: INSTRUCTOR > TA > STUDENT > VIEWER
  * 
  * @param userId - The ID of the user
  * @param offeringId - The ID of the course offering
@@ -28,7 +28,8 @@ export const getHighestAccessEnrollment = async (
 
   // If multiple enrollments exist, return the one with highest access level
   const rolePriority: Record<CourseOfferingRole, number> = {
-    INSTRUCTOR: 3,
+    INSTRUCTOR: 4,
+    TA: 3,
     STUDENT: 2,
     VIEWER: 1,
   };
@@ -95,5 +96,21 @@ export const checkStudentAccess = async (
 ) => {
   return await checkCourseOfferingAccess(userId, offeringId, [
     COURSE_OFFERING_ROLES.STUDENT,
+  ]);
+};
+
+/**
+ * Check if a user is course teaching staff (instructor or TA) for an offering.
+ *
+ * Used for day-to-day course operations (teams, deployments when locked, offering detail).
+ * Enrollment management, Spark keys, lock/unlock, and settings changes remain instructor-only.
+ */
+export const checkTeachingStaffAccess = async (
+  userId: number,
+  offeringId: number,
+) => {
+  return await checkCourseOfferingAccess(userId, offeringId, [
+    COURSE_OFFERING_ROLES.INSTRUCTOR,
+    COURSE_OFFERING_ROLES.TA,
   ]);
 };

@@ -113,30 +113,6 @@ export const migrateProject = async (req: Request, res: Response) => {
   }
 };
 
-export const backfillTeamAliasesFromRunningProjectsHandler = async (
-  req: Request,
-  res: Response,
-) => {
-  try {
-    const dryRun = req.body?.dryRun === true;
-    const summary = await adminService.backfillTeamAliasesFromRunningProjects({
-      dryRun,
-    });
-
-    return res.json({
-      message: dryRun
-        ? 'Dry run completed; no database writes performed'
-        : 'Team aliases assigned: running projects preferred, otherwise from team names',
-      ...summary,
-    });
-  } catch (error) {
-    return res.status(500).json({
-      error: 'Failed to backfill team aliases',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
-};
-
 /**
  * Helper function to format bytes to human-readable format
  */

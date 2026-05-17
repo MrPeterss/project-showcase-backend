@@ -43,13 +43,3 @@ export const migrateProjectSchema = z.object({
     githubUrl: z.string().url().optional(),
   }),
 });
-
-export const backfillTeamAliasesSchema = z.object({
-  body: z.preprocess(
-    (val) => (val === undefined || val === null ? {} : val),
-    z.object({
-      dryRun: z.boolean().optional(),
-    }),
-  ),
-});
-

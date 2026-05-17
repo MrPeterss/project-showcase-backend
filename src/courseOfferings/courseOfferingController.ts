@@ -16,6 +16,7 @@ import {
 import {
   checkCourseOfferingAccess,
   checkInstructorAccess,
+  checkTeachingStaffAccess,
 } from '../utils/authorizationHelpers.js';
 import {
   deleteCourseOfferingWithCleanup,
@@ -110,19 +111,20 @@ export const getCourseOffering = async (req: Request, res: Response) => {
     userRole = SYSTEM_ROLES.ADMIN;
   }
 
-  // Check if user should have access to enrollments
-  const hasInstructorAccess =
+  // Instructors, TAs, and admins see the enrollment roster on the offering detail payload
+  const canSeeEnrollmentRoster =
     userRole === COURSE_OFFERING_ROLES.INSTRUCTOR ||
+    userRole === COURSE_OFFERING_ROLES.TA ||
     userRole === SYSTEM_ROLES.ADMIN;
 
   const isViewer = userRole === COURSE_OFFERING_ROLES.VIEWER;
 
-  // Omit enrollments if user is not an instructor or admin
+  // Omit enrollments if user is not teaching staff or admin
   // Omit settings if user is a viewer (students and instructors can see serverLocked status)
   const response = {
     ...courseOffering,
     userRole,
-    ...(!hasInstructorAccess && { enrollments: undefined }),
+    ...(!canSeeEnrollmentRoster && { enrollments: undefined }),
     ...(isViewer && { settings: undefined }),
   };
 
@@ -323,12 +325,12 @@ export const tagCourseOfferingProjects = async (req: Request, res: Response) => 
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin or instructor of the offering
+  // Check permissions - admin, instructor, or TA of the offering
   if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(userId, offeringId);
-    if (!instructorAccess) {
+    const staffAccess = await checkTeachingStaffAccess(userId, offeringId);
+    if (!staffAccess) {
       throw new ForbiddenError(
-        'Only admins or instructors of the course offering can tag projects',
+        'Only admins, instructors, or TAs of the course offering can tag projects',
       );
     }
   }
@@ -360,12 +362,12 @@ export const removeTagFromCourseOfferingProjects = async (
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin or instructor of the offering
+  // Check permissions - admin, instructor, or TA of the offering
   if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(userId, offeringId);
-    if (!instructorAccess) {
+    const staffAccess = await checkTeachingStaffAccess(userId, offeringId);
+    if (!staffAccess) {
       throw new ForbiddenError(
-        'Only admins or instructors of the course offering can remove tags',
+        'Only admins, instructors, or TAs of the course offering can remove tags',
       );
     }
   }

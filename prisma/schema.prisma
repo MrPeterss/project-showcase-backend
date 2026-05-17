@@ -9,6 +9,7 @@ datasource db {
 
 enum CourseOfferingRole {
   INSTRUCTOR
+  TA
   STUDENT
   VIEWER
 }

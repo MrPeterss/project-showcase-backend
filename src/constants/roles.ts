@@ -3,6 +3,7 @@ import type { CourseOfferingRole } from '@prisma/client';
 // Course offering role constants
 export const COURSE_OFFERING_ROLES = {
   INSTRUCTOR: 'INSTRUCTOR' as const,
+  TA: 'TA' as const,
   STUDENT: 'STUDENT' as const,
   VIEWER: 'VIEWER' as const,
 } as const;
@@ -15,6 +16,7 @@ export const SYSTEM_ROLES = {
 // Array of all course offering roles for validation
 export const COURSE_OFFERING_ROLE_VALUES: CourseOfferingRole[] = [
   COURSE_OFFERING_ROLES.INSTRUCTOR,
+  COURSE_OFFERING_ROLES.TA,
   COURSE_OFFERING_ROLES.STUDENT,
   COURSE_OFFERING_ROLES.VIEWER,
 ];

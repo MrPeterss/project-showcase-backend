@@ -2,11 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { EnvironmentScope } from '@prisma/client';
-import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { docker } from '../docker.js';
 import { simpleGit } from '../git.js';
 import { prisma } from '../prisma.js';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/AppError.js';
+import { checkTeachingStaffAccess } from '../utils/authorizationHelpers.js';
 import { dockerDeploymentSlugForTeam } from '../utils/teamAlias.js';
 
 // Re-export tag services for backwards compatibility
@@ -306,17 +306,19 @@ export const deploy = async (
   const serverLocked = settings.serverLocked === true;
 
   if (serverLocked) {
-    // Check if user is admin or instructor
-    const isInstructor = await checkInstructorAccess(deployedById, team.CourseOffering.id);
-    
-    // If not admin and not instructor, block deployment
+    const isTeachingStaff = await checkTeachingStaffAccess(
+      deployedById,
+      team.CourseOffering.id,
+    );
+
+    // If not admin and not teaching staff, block deployment
     // Note: We don't have isAdmin flag here, so we need to check user's admin status
     const user = await prisma.user.findUnique({
       where: { id: deployedById },
       select: { isAdmin: true },
     });
 
-    if (!user?.isAdmin && !isInstructor) {
+    if (!user?.isAdmin && !isTeachingStaff) {
       throw new ForbiddenError('Deployments are locked for this course offering');
     }
   }
@@ -519,49 +521,8 @@ export const getProjectById = async (projectId: number) => {
 };
 
 /**
- * Helper function to get enrollment with highest access level
- * Role hierarchy: INSTRUCTOR > STUDENT > VIEWER
- */
-const getHighestAccessEnrollment = async (
-  userId: number,
-  offeringId: number,
-) => {
-  const enrollments = await prisma.courseOfferingEnrollment.findMany({
-    where: {
-      userId,
-      courseOfferingId: offeringId,
-    },
-  });
-
-  if (enrollments.length === 0) {
-    return null;
-  }
-
-  // If multiple enrollments exist, return the one with highest access level
-  const rolePriority: Record<string, number> = {
-    INSTRUCTOR: 3,
-    STUDENT: 2,
-    VIEWER: 1,
-  };
-
-  return enrollments.reduce((highest, current) => {
-    return rolePriority[current.role] > rolePriority[highest.role]
-      ? current
-      : highest;
-  });
-};
-
-/**
- * Helper function to check if user is instructor of course offering
- */
-const checkInstructorAccess = async (userId: number, offeringId: number) => {
-  const enrollment = await getHighestAccessEnrollment(userId, offeringId);
-  return enrollment?.role === COURSE_OFFERING_ROLES.INSTRUCTOR;
-};
-
-/**
  * Stop a running container and update project status
- * Validates that the user is an admin, instructor, or team member
+ * Validates that the user is an admin, teaching staff, or team member
  */
 export const stopProject = async (projectId: number, userId: number, isAdmin: boolean) => {
   const project = await prisma.project.findUnique({
@@ -590,9 +551,9 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
   const serverLocked =
     (offeringSettings as { serverLocked?: boolean }).serverLocked === true;
 
-  // Check permissions - admin, instructor, or team member
+  // Check permissions - admin, teaching staff, or team member
   if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(
+    const isTeachingStaff = await checkTeachingStaffAccess(
       userId,
       project.team.CourseOffering.id,
     );
@@ -600,15 +561,17 @@ export const stopProject = async (projectId: number, userId: number, isAdmin: bo
       (membership) => membership.userId === userId,
     );
 
-    // If server is locked, only admins or instructors can stop projects
-    if (serverLocked && !isInstructor) {
+    // If server is locked, only admins or teaching staff can stop projects
+    if (serverLocked && !isTeachingStaff) {
       throw new ForbiddenError(
         'Project control is locked for this course offering',
       );
     }
 
-    if (!isInstructor && !isTeamMember) {
-      throw new ForbiddenError('You must be an admin, instructor, or team member to stop this project');
+    if (!isTeachingStaff && !isTeamMember) {
+      throw new ForbiddenError(
+        'You must be an admin, instructor, TA, or team member to stop this project',
+      );
     }
   }
 
@@ -831,16 +794,18 @@ export const deployWithStreaming = async (
   const serverLocked = settings.serverLocked === true;
 
   if (serverLocked) {
-    // Check if user is admin or instructor
-    const isInstructor = await checkInstructorAccess(deployedById, team.CourseOffering.id);
-    
+    const isTeachingStaff = await checkTeachingStaffAccess(
+      deployedById,
+      team.CourseOffering.id,
+    );
+
     // Check user's admin status
     const user = await prisma.user.findUnique({
       where: { id: deployedById },
       select: { isAdmin: true },
     });
 
-    if (!user?.isAdmin && !isInstructor) {
+    if (!user?.isAdmin && !isTeachingStaff) {
       throw new ForbiddenError('Deployments are locked for this course offering');
     }
   }
@@ -1283,16 +1248,18 @@ export const deployFromProject = async (
   const serverLocked = settings.serverLocked === true;
 
   if (serverLocked) {
-    // Check if user is admin or instructor
-    const isInstructor = await checkInstructorAccess(deployedById, sourceProject.team.CourseOffering.id);
-    
+    const isTeachingStaff = await checkTeachingStaffAccess(
+      deployedById,
+      sourceProject.team.CourseOffering.id,
+    );
+
     // Check user's admin status
     const user = await prisma.user.findUnique({
       where: { id: deployedById },
       select: { isAdmin: true },
     });
 
-    if (!user?.isAdmin && !isInstructor) {
+    if (!user?.isAdmin && !isTeachingStaff) {
       throw new ForbiddenError('Deployments are locked for this course offering');
     }
   }

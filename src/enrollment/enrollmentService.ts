@@ -10,7 +10,7 @@ import { prisma } from '../prisma.js';
  * 
  * @param userId - The ID of the user to enroll
  * @param offeringId - The ID of the course offering to enroll in
- * @param role - The role to assign (STUDENT, INSTRUCTOR, or VIEWER)
+ * @param role - The role to assign (STUDENT, INSTRUCTOR, TA, or VIEWER)
  * @param referringCourseId - Optional ID of the course that referred this enrollment
  * @returns The created enrollment
  */
