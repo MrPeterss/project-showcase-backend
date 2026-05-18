@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+import {
+  offeringIdParam,
+  teamIdParam,
+  userIdParam,
+} from '../schemas/paramCoercions.js';
+
 export const createTeamSchema = z.object({
   body: z.object({
     name: z.string().min(1).max(100),
@@ -23,59 +29,19 @@ export const addTeamMembersSchema = z.object({
 
 export const teamParamsSchema = z.object({
   params: z.object({
-    teamId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid team ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    teamId: teamIdParam,
   }),
 });
 
 export const courseOfferingTeamsParamsSchema = z.object({
   params: z.object({
-    offeringId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    offeringId: offeringIdParam,
   }),
 });
 
 export const teamMemberParamsSchema = z.object({
   params: z.object({
-    teamId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid team ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
-    userId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid user ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    teamId: teamIdParam,
+    userId: userIdParam,
   }),
 });

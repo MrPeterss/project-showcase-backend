@@ -5,7 +5,8 @@ import { FirebaseAppError } from 'firebase-admin/app';
 
 import type { Request, Response } from 'express';
 
-import firebaseAdmin from '../firebase.js';
+import { getEnv } from '../config/env.js';
+import { getFirebaseAdmin } from '../firebase.js';
 import { prisma } from '../prisma.js';
 import { ForbiddenError, UnauthorizedError } from '../utils/AppError.js';
 
@@ -21,7 +22,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
   let firebaseUser;
 
   try {
-    firebaseUser = await firebaseAdmin.auth().verifyIdToken(firebaseToken);
+    firebaseUser = await getFirebaseAdmin().auth().verifyIdToken(firebaseToken);
   } catch (error: unknown) {
     if (error instanceof FirebaseAppError) {
       if (error.code === 'auth/id-token-expired') {
@@ -65,7 +66,7 @@ export const verifyFirebaseToken = async (req: Request, res: Response) => {
 
   const accessToken = jwt.sign(
     { userId: user.id, isAdmin: user.isAdmin },
-    process.env.ACCESS_TOKEN_SECRET!,
+    getEnv().ACCESS_TOKEN_SECRET,
     { expiresIn: '15m' },
   );
 
@@ -89,7 +90,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
 
   const newAccessToken = jwt.sign(
     { userId: user.id, isAdmin: user.isAdmin },
-    process.env.ACCESS_TOKEN_SECRET!,
+    getEnv().ACCESS_TOKEN_SECRET,
     { expiresIn: '15m' },
   );
 

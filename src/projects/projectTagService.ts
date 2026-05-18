@@ -1,5 +1,6 @@
 import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
+import { parseStoredCourseOfferingSettings } from '../courseOfferings/courseOfferingSettingsSchema.js';
 import { BadRequestError, NotFoundError } from '../utils/AppError.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import { dockerDeploymentSlugForTeam } from '../utils/teamAlias.js';
@@ -41,7 +42,7 @@ export const tagCourseOfferingProjects = async (
     throw new NotFoundError('Course offering not found');
   }
 
-  const settings = (courseOffering.settings as Record<string, unknown>) || {};
+  const settings = parseStoredCourseOfferingSettings(courseOffering.settings);
   const tags = Array.isArray(settings.project_tags)
     ? (settings.project_tags as string[])
     : [];
@@ -158,7 +159,7 @@ export const removeTagFromCourseOfferingProjects = async (
     throw new NotFoundError('Course offering not found');
   }
 
-  const settings = (courseOffering.settings as Record<string, unknown>) || {};
+  const settings = parseStoredCourseOfferingSettings(courseOffering.settings);
   const tags = Array.isArray(settings.project_tags)
     ? (settings.project_tags as string[])
     : [];

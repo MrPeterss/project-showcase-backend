@@ -214,8 +214,13 @@ export const deleteTeamWithCleanup = async (teamId: number) => {
   // Stop and remove Docker containers for all projects
   await cleanupTeamContainers(teamId);
 
-  // Delete all projects for this team
+  // Delete all projects for this team (ProjectOfferingTag rows cascade from Project)
   await prisma.project.deleteMany({
+    where: { teamId },
+  });
+
+  // Spark / env rows keyed by team
+  await prisma.teamEnvironment.deleteMany({
     where: { teamId },
   });
 

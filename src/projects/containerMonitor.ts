@@ -1,6 +1,7 @@
 import * as cron from 'node-cron';
 import * as fs from 'fs';
 
+import { PROJECT_STATUS } from '../constants/projectStatus.js';
 import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 
@@ -18,7 +19,7 @@ const checkContainerStatus = async (project: {
     await prisma.project.update({
       where: { id: project.id },
       data: {
-        status: 'stopped',
+        status: PROJECT_STATUS.STOPPED,
         stoppedAt: new Date(),
         lastCheckedAt: new Date(),
       },
@@ -38,7 +39,7 @@ const checkContainerStatus = async (project: {
       await prisma.project.update({
         where: { id: project.id },
         data: {
-          status: 'stopped',
+          status: PROJECT_STATUS.STOPPED,
           stoppedAt: new Date(),
           lastCheckedAt: new Date(),
         },
@@ -53,7 +54,7 @@ const checkContainerStatus = async (project: {
       await prisma.project.update({
         where: { id: project.id },
         data: {
-          status: 'stopped',
+          status: PROJECT_STATUS.STOPPED,
           stoppedAt: new Date(),
           lastCheckedAt: new Date(),
         },
@@ -119,7 +120,7 @@ const checkStoppedProjects = async () => {
     // Get all stopped projects
     const stoppedProjects = await prisma.project.findMany({
       where: {
-        status: 'stopped',
+        status: PROJECT_STATUS.STOPPED,
       },
       select: {
         id: true,
@@ -149,7 +150,7 @@ const checkStoppedProjects = async () => {
           await prisma.project.update({
             where: { id: project.id },
             data: {
-              status: 'running',
+              status: PROJECT_STATUS.RUNNING,
               stoppedAt: null,
               failedCheckCount: 0,
               lastCheckedAt: new Date(),
@@ -186,7 +187,7 @@ const checkRunningProjects = async () => {
     // Get all projects with status "running"
     const runningProjects = await prisma.project.findMany({
       where: {
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
       },
       select: {
         id: true,
@@ -281,7 +282,7 @@ export const pruneUntaggedProjects = async (): Promise<{
     // Get all running containers and add their image hashes to protected set
     const runningProjects = await prisma.project.findMany({
       where: {
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
       },
       select: {
         id: true,
@@ -310,7 +311,7 @@ export const pruneUntaggedProjects = async (): Promise<{
               { projectOfferingTags: { some: {} } },
             ],
           },
-          { status: { not: 'pruned' } },
+          { status: { not: PROJECT_STATUS.PRUNED } },
         ],
       },
       select: {
@@ -334,8 +335,8 @@ export const pruneUntaggedProjects = async (): Promise<{
     const projectsToPrune = await prisma.project.findMany({
       where: {
         AND: [
-          { status: { not: 'running' } },
-          { status: { not: 'pruned' } },
+          { status: { not: PROJECT_STATUS.RUNNING } },
+          { status: { not: PROJECT_STATUS.PRUNED } },
           { tag: null },
           { projectOfferingTags: { none: {} } },
         ],
@@ -484,7 +485,7 @@ export const pruneUntaggedProjects = async (): Promise<{
           await prisma.project.update({
             where: { id: project.id },
             data: {
-              status: 'pruned',
+              status: PROJECT_STATUS.PRUNED,
               containerId: null,
               containerName: null,
               dataFile: null,

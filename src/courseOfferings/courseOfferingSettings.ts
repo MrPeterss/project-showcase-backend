@@ -2,6 +2,7 @@ import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
 import { ForbiddenError, NotFoundError } from '../utils/AppError.js';
 import { checkInstructorAccess } from '../utils/authorizationHelpers.js';
+import { parseStoredCourseOfferingSettings } from './courseOfferingSettingsSchema.js';
 
 // Enum for processable course offering settings keys
 export enum CourseOfferingSettingKey {
@@ -158,20 +159,23 @@ export const processCourseVisibilitySetting = async (
  */
 export const processCourseOfferingSettings = async (
   offeringId: number,
-  oldSettings: Record<string, unknown>,
-  newSettings: Record<string, unknown>,
+  oldSettings: unknown,
+  newSettings: unknown,
   userId: number,
   isAdmin: boolean,
 ) => {
+  const oldParsed = parseStoredCourseOfferingSettings(oldSettings);
+  const newParsed = parseStoredCourseOfferingSettings(newSettings);
+
   // Process course_visibility setting if present
   if (
-    CourseOfferingSettingKey.COURSE_VISIBILITY in oldSettings ||
-    CourseOfferingSettingKey.COURSE_VISIBILITY in newSettings
+    CourseOfferingSettingKey.COURSE_VISIBILITY in oldParsed ||
+    CourseOfferingSettingKey.COURSE_VISIBILITY in newParsed
   ) {
     await processCourseVisibilitySetting(
       offeringId,
-      oldSettings,
-      newSettings,
+      oldParsed,
+      newParsed,
       userId,
       isAdmin,
     );

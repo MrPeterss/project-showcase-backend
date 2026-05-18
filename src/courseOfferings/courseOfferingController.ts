@@ -7,7 +7,7 @@ import { prisma } from '../prisma.js';
 import {
   removeTagFromCourseOfferingProjects as removeTagService,
   tagCourseOfferingProjects as tagProjectsService,
-} from '../projects/projectService.js';
+} from '../projects/projectTagService.js';
 import {
   ConflictError,
   ForbiddenError,
@@ -76,7 +76,7 @@ export const getAllCourseOfferings = async (req: Request, res: Response) => {
 // GET /course-offerings/:offeringId
 export const getCourseOffering = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: offeringId },
@@ -182,7 +182,7 @@ export const createCourseOffering = async (req: Request, res: Response) => {
 // PUT /course-offerings/:offeringId
 export const updateCourseOffering = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
   const { settings } = req.body;
 
   const courseOffering = await prisma.courseOffering.findUnique({
@@ -228,7 +228,7 @@ export const updateCourseOffering = async (req: Request, res: Response) => {
 
 // DELETE /course-offerings/:offeringId
 export const deleteCourseOffering = async (req: Request, res: Response) => {
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: offeringId },
@@ -247,7 +247,7 @@ export const deleteCourseOffering = async (req: Request, res: Response) => {
 // POST /course-offerings/:offeringId/lock
 export const lockCourseOfferingServer = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: offeringId },
@@ -279,7 +279,7 @@ export const lockCourseOfferingServer = async (req: Request, res: Response) => {
 // POST /course-offerings/:offeringId/unlock
 export const unlockCourseOfferingServer = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
   const courseOffering = await prisma.courseOffering.findUnique({
     where: { id: offeringId },
@@ -312,7 +312,7 @@ export const unlockCourseOfferingServer = async (req: Request, res: Response) =>
 export const tagCourseOfferingProjects = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
   // Validation middleware ensures these are valid
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
   const { tag } = req.body;
 
   // Check if course offering exists
@@ -349,7 +349,7 @@ export const removeTagFromCourseOfferingProjects = async (
 ) => {
   const { userId, isAdmin } = req.user!;
   // Validation middleware ensures these are valid
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
   const { tag } = req.body;
 
   // Check if course offering exists

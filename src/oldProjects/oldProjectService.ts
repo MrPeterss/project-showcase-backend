@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { PROJECT_STATUS } from '../constants/projectStatus.js';
 import { docker } from '../docker.js';
 import { git } from '../git.js';
 import { prisma } from '../prisma.js';
+import { PROJECTS_NETWORK } from '../projects/projectDockerOps.js';
 import { NotFoundError } from '../utils/AppError.js';
-
-const PROJECTS_NETWORK = 'projects_network';
 
 /**
  * Extract repository name from GitHub URL
@@ -72,7 +72,7 @@ export const buildOldJson = async (
       teamId,
       githubUrl,
       imageHash: '', // Will be set after build
-      status: 'building',
+      status: PROJECT_STATUS.BUILDING,
       deployedById,
       buildArgs: {},
     },
@@ -87,7 +87,7 @@ export const buildOldJson = async (
     const runningProjects = await prisma.project.findMany({
       where: {
         teamId,
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
         id: { not: project.id },
       },
       select: {
@@ -107,7 +107,7 @@ export const buildOldJson = async (
           await prisma.project.update({
             where: { id: runningProject.id },
             data: {
-              status: 'stopped',
+              status: PROJECT_STATUS.STOPPED,
               stoppedAt: new Date(),
               failedCheckCount: 0,
               lastCheckedAt: null,
@@ -239,7 +239,7 @@ export const buildOldJson = async (
       data: {
         containerId: backendContainer.id,
         containerName: containerInfo.Name,
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
         ports: containerInfo.NetworkSettings.Ports,
         deployedAt: new Date(),
       },
@@ -263,7 +263,7 @@ export const buildOldJson = async (
     // Update project status to failed
     await prisma.project.update({
       where: { id: project.id },
-      data: { status: 'failed' },
+      data: { status: PROJECT_STATUS.FAILED },
     });
     throw error;
   } finally {
@@ -297,7 +297,7 @@ export const buildOldSql = async (
       teamId,
       githubUrl,
       imageHash: '', // Will be set after build
-      status: 'building',
+      status: PROJECT_STATUS.BUILDING,
       deployedById,
       buildArgs: {},
     },
@@ -312,7 +312,7 @@ export const buildOldSql = async (
     const runningProjects = await prisma.project.findMany({
       where: {
         teamId,
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
         id: { not: project.id },
       },
       select: {
@@ -332,7 +332,7 @@ export const buildOldSql = async (
           await prisma.project.update({
             where: { id: runningProject.id },
             data: {
-              status: 'stopped',
+              status: PROJECT_STATUS.STOPPED,
               stoppedAt: new Date(),
               failedCheckCount: 0,
               lastCheckedAt: null,
@@ -464,7 +464,7 @@ export const buildOldSql = async (
       data: {
         containerId: backendContainer.id,
         containerName: containerInfo.Name,
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
         ports: containerInfo.NetworkSettings.Ports,
         deployedAt: new Date(),
       },
@@ -488,7 +488,7 @@ export const buildOldSql = async (
     // Update project status to failed
     await prisma.project.update({
       where: { id: project.id },
-      data: { status: 'failed' },
+      data: { status: PROJECT_STATUS.FAILED },
     });
     throw error;
   } finally {

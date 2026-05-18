@@ -1,3 +1,4 @@
+import { PROJECT_STATUS } from '../constants/projectStatus.js';
 import { prisma } from '../prisma.js';
 
 /**
@@ -14,7 +15,7 @@ export const getTeamPreferredProject = async <T extends Record<string, unknown>>
   const baseQuery = {
     where: {
       teamId,
-      status: 'running' as const,
+      status: PROJECT_STATUS.RUNNING,
     },
     orderBy: { deployedAt: 'desc' as const },
     ...(select && { select }),

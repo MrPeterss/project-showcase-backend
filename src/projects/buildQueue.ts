@@ -38,7 +38,7 @@ class BuildQueue {
   private readonly maxConcurrent: number;
   private activeCount = 0;
   private readonly queue: QueueEntry[] = [];
-  private positionInterval: NodeJS.Timeout | null = null;
+  private positionInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.maxConcurrent = resolveMaxConcurrent();

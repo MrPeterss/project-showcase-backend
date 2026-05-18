@@ -1,42 +1,47 @@
 import jwt from 'jsonwebtoken';
+import { promisify } from 'node:util';
 
 import type { NextFunction, Request, Response } from 'express';
 
+import { getEnv } from '../config/env.js';
 import type { AuthJwtPayload } from '../types/express/index.js';
 import { ForbiddenError, UnauthorizedError } from '../utils/AppError.js';
 
-export const requireAuth = (
+const verifyJwt = promisify(jwt.verify) as (
+  token: string,
+  secretOrKey: jwt.Secret,
+) => Promise<string | jwt.JwtPayload>;
+
+export const requireAuth = async (
   req: Request,
   _res: Response,
   next: NextFunction,
 ) => {
-  // Development bypass
-  if (process.env.NODE_ENV === 'development') {
-    req.user = {
-      userId: 1,
-      isAdmin: true,
-    };
-    return next();
-  }
+  try {
+    const { ACCESS_TOKEN_SECRET } = getEnv();
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedError('No token provided or wrong format.');
+    }
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new UnauthorizedError('No token provided or wrong format.');
-  }
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      throw new UnauthorizedError('No token provided.');
+    }
 
-  const token = authHeader.split(' ')[1];
-  if (!token) {
-    throw new UnauthorizedError('No token provided.');
-  }
-
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET!, (err, decodedToken) => {
-    if (err || !decodedToken || typeof decodedToken === 'string') {
+    const decoded = await verifyJwt(token, ACCESS_TOKEN_SECRET);
+    if (typeof decoded === 'string') {
       throw new UnauthorizedError('Invalid token.');
     }
-    req.user = decodedToken as AuthJwtPayload;
-  });
 
-  return next();
+    req.user = decoded as AuthJwtPayload;
+    return next();
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return next(err);
+    }
+    return next(new UnauthorizedError('Invalid token.'));
+  }
 };
 
 // Middleware to require admin role

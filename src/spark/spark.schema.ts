@@ -1,22 +1,9 @@
 import { z } from 'zod';
 
-const offeringIdParam = z.string().transform((val, ctx) => {
-  const parsed = parseInt(val, 10);
-  if (isNaN(parsed)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid offering ID' });
-    return z.NEVER;
-  }
-  return parsed;
-});
-
-const sparkKeyIdParam = z.string().transform((val, ctx) => {
-  const parsed = parseInt(val, 10);
-  if (isNaN(parsed)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid Spark key ID' });
-    return z.NEVER;
-  }
-  return parsed;
-});
+import {
+  offeringIdParam,
+  sparkKeyIdParam,
+} from '../schemas/paramCoercions.js';
 
 export const sparkOfferingParamsSchema = z.object({
   params: z.object({

@@ -1,83 +1,23 @@
-import cookieParser from 'cookie-parser';
 import 'dotenv/config';
-import helmet from 'helmet';
 
-import express from 'express';
-import type { Request, Response } from 'express';
-
-import adminRouter from './admin/adminRouter.js';
-import authRouter from './auth/authRouter.js';
-import courseOfferingRouter from './courseOfferings/courseOfferingRouter.js';
-import courseRouter from './courses/courseRouter.js';
-import enrollmentRouter from './enrollment/enrollmentRouter.js';
-import { requireAdmin, requireAuth } from './middleware/authentication.js';
-import { globalErrorHandler } from './middleware/errorHandler.js';
-import { requestLogger } from './middleware/logger.js';
-import { userRateLimiter } from './middleware/rateLimit.js';
-import { prisma } from './prisma.js';
+import { createApp } from './app.js';
+import { loadEnv } from './config/env.js';
+import { initFirebase } from './firebase.js';
 import {
   startContainerMonitor,
   startProjectPruner,
   stopContainerMonitor,
   stopProjectPruner,
 } from './projects/containerMonitor.js';
-import projectRouter from './projects/projectRouter.js';
-import semesterRouter from './semesters/semesterRouter.js';
-import teamRouter from './teams/teamRouter.js';
-import userRouter from './users/userRouter.js';
+import { prisma } from './prisma.js';
 
-const app = express();
+loadEnv();
 
-// Trust proxy - necessary when behind a reverse proxy (nginx)
-app.set('trust proxy', 1);
+if (process.env.NODE_ENV !== 'test') {
+  initFirebase();
+}
 
-app.use(requestLogger);
-app.use(helmet());
-app.use(express.json({ limit: '1mb' }));
-app.use(cookieParser());
-
-const router = express.Router();
-
-// Health check endpoint
-router.get('/health', async (_: Request, res: Response) => {
-  const healthCheck = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    database: 'unknown',
-  };
-
-  try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
-    healthCheck.database = 'connected';
-    res.status(200).json(healthCheck);
-  } catch {
-    healthCheck.status = 'unhealthy';
-    healthCheck.database = 'disconnected';
-    res.status(503).json(healthCheck);
-  }
-});
-
-// Public authentication routes
-router.use('/auth', authRouter);
-
-// Protected routes (require authentication)
-router.use(requireAuth);
-router.use(userRateLimiter);
-router.use('/admin', requireAdmin, adminRouter);
-router.use('/users', userRouter);
-router.use('/semesters', semesterRouter);
-router.use('/teams', teamRouter);
-router.use('/courses', courseRouter);
-router.use('/course-offerings', courseOfferingRouter);
-router.use('/enrollments', enrollmentRouter);
-router.use('/projects', projectRouter);
-
-app.use(router);
-
-app.use(globalErrorHandler);
+const app = createApp();
 
 const port = process.env.PORT || '8000';
 
@@ -85,7 +25,6 @@ const server = app.listen(port, async () => {
   console.log(`Express app listening at http://localhost:${port}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
-  // Verify database connection on startup
   try {
     await prisma.$connect();
     console.log('Database connected successfully');
@@ -94,34 +33,25 @@ const server = app.listen(port, async () => {
     process.exit(1);
   }
 
-  // Start container monitoring cron job
   startContainerMonitor();
-
-  // Start project pruning cron job
   startProjectPruner();
 });
 
-// Graceful shutdown
 const gracefulShutdown = async () => {
   console.log('Shutting down gracefully...');
 
-  // Stop container monitoring cron job
   stopContainerMonitor();
-
-  // Stop project pruning cron job
   stopProjectPruner();
 
   server.close(async () => {
     console.log('HTTP server closed');
 
-    // Disconnect from database
     await prisma.$disconnect();
     console.log('Database disconnected');
 
     process.exit(0);
   });
 
-  // Force shutdown after 10 seconds
   setTimeout(() => {
     console.error('Forcing shutdown after timeout');
     process.exit(1);

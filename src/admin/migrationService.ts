@@ -2,9 +2,8 @@ import { randomUUID } from 'crypto';
 
 import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
+import { PROJECTS_NETWORK } from '../projects/projectDockerOps.js';
 import { NotFoundError } from '../utils/AppError.js';
-
-const PROJECTS_NETWORK = 'projects_network';
 
 /**
  * Legacy admin migration: same as historical behavior when Team.alias is unset.

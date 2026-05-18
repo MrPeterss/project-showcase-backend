@@ -129,7 +129,7 @@ model Project {
   tag                  String? // Legacy: last/mirror of tag name for compatibility; use ProjectOfferingTag
   containerId          String?   @unique
   containerName        String?
-  status               String // running, stopped, failed, etc.
+  status               String // Project lifecycle — see constants/projectStatus.ts (Prisma enum migration deferred)
   ports                Json? // Store port mappings as JSON
   buildLogs            String? // Store build logs as text
   buildArgs            Json? // Store build arguments as JSON

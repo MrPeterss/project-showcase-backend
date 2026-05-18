@@ -56,7 +56,7 @@ export const deployProject = async (req: Request, res: Response) => {
     run: async () => {
       try {
         result = await deploy(
-          Number(teamId),
+          teamId as number,
           githubUrl,
           userId,
           buildArgs,
@@ -88,21 +88,21 @@ export const getTeamProjectsController = async (
   req: Request,
   res: Response,
 ) => {
-  const { teamId } = req.params;
-  const projects = await getTeamProjects(Number(teamId));
+  const teamId = req.validated!.params!.teamId as number;
+  const projects = await getTeamProjects(teamId);
   return res.json({ projects });
 };
 
 export const getProject = async (req: Request, res: Response) => {
-  const { projectId } = req.params;
-  const project = await getProjectById(Number(projectId));
+  const projectId = req.validated!.params!.projectId as number;
+  const project = await getProjectById(projectId);
   return res.json({ project });
 };
 
 export const stopProjectController = async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const projectId = req.validated!.params!.projectId as number;
   const { userId, isAdmin } = req.user!;
-  const project = await stopProject(Number(projectId), userId, isAdmin);
+  const project = await stopProject(projectId, userId, isAdmin);
   return res.json({
     message: 'Project stopped successfully',
     project,
@@ -113,14 +113,18 @@ export const streamProjectLogsController = async (
   req: Request,
   res: Response,
 ) => {
-  const { projectId } = req.params;
-  const { tail, since, timestamps } = req.query;
+  const projectId = req.validated!.params!.projectId as number;
+  const query = (req.validated!.query ?? {}) as {
+    tail?: number;
+    since?: string;
+    timestamps?: boolean;
+  };
 
   try {
-    const { project, stream } = await streamProjectLogs(Number(projectId), {
-      tail: tail ? Number(tail) : undefined,
-      since: since as string | undefined,
-      timestamps: timestamps === 'true',
+    const { project, stream } = await streamProjectLogs(projectId, {
+      tail: query.tail,
+      since: query.since,
+      timestamps: query.timestamps ?? false,
     });
 
     // Set headers for Server-Sent Events
@@ -214,10 +218,10 @@ export const streamBuildLogsController = async (
   req: Request,
   res: Response,
 ) => {
-  const { projectId } = req.params;
+  const projectId = req.validated!.params!.projectId as number;
 
   try {
-    const { project, buildLogs } = await streamBuildLogs(Number(projectId));
+    const { project, buildLogs } = await streamBuildLogs(projectId);
 
     // Set headers for Server-Sent Events
     res.setHeader('Content-Type', 'text/event-stream');
@@ -337,7 +341,7 @@ export const deployProjectWithStreamingController = async (
 
         try {
           const { project, initBuild, completeBuild } = await deployWithStreaming(
-            Number(teamId),
+            teamId as number,
             githubUrl,
             userId,
             buildArgs,
@@ -409,10 +413,10 @@ export const deployProjectWithStreamingController = async (
 };
 
 export const redeployProjectController = async (req: Request, res: Response) => {
-  const { projectId } = req.params;
+  const projectId = req.validated!.params!.projectId as number;
   const { userId } = req.user!;
 
-  const result = await deployFromProject(Number(projectId), userId);
+  const result = await deployFromProject(projectId, userId);
 
   return res.status(201).json({
     message: 'Project redeployed successfully',

@@ -3,15 +3,12 @@ import type { CourseOfferingRole } from '@prisma/client';
 import type { Request, Response } from 'express';
 
 import { prisma } from '../prisma.js';
+import { assertOfferingAccessForUser } from '../authorization/courseOfferingGuards.js';
 import {
   ConflictError,
-  ForbiddenError,
   NotFoundError,
 } from '../utils/AppError.js';
-import {
-  getHighestAccessEnrollment,
-  checkInstructorAccess,
-} from '../utils/authorizationHelpers.js';
+import { getHighestAccessEnrollment } from '../utils/authorizationHelpers.js';
 import {
   addStudentEnrollment,
   removeStudentEnrollment,
@@ -24,24 +21,15 @@ export const getCourseOfferingEnrollments = async (
   res: Response,
 ) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check permissions - admin or instructor of the offering
-  if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(userId, offeringId);
-    if (!isInstructor) {
-      throw new ForbiddenError('Only instructors can view enrollments');
-    }
-  }
+  await assertOfferingAccessForUser(
+    userId,
+    offeringId,
+    isAdmin,
+    'instructorOnly',
+    'Only instructors can view enrollments',
+  );
 
   const enrollments = await prisma.courseOfferingEnrollment.findMany({
     where: { courseOfferingId: offeringId },
@@ -61,25 +49,16 @@ export const createCourseOfferingEnrollments = async (
   res: Response,
 ) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
   const { enrollments } = req.body;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check permissions - admin or instructor of the offering
-  if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(userId, offeringId);
-    if (!isInstructor) {
-      throw new ForbiddenError('Only instructors can manage enrollments');
-    }
-  }
+  await assertOfferingAccessForUser(
+    userId,
+    offeringId,
+    isAdmin,
+    'instructorOnly',
+    'Only instructors can manage enrollments',
+  );
 
   const createdEnrollments = [];
 
@@ -148,26 +127,17 @@ export const updateCourseOfferingEnrollment = async (
   res: Response,
 ) => {
   const { userId: currentUserId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
-  const targetUserId = parseInt(req.params.userId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
+  const targetUserId = req.validated!.params!.userId as number;
   const { role } = req.body;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check permissions - admin or instructor of the offering
-  if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(currentUserId, offeringId);
-    if (!isInstructor) {
-      throw new ForbiddenError('Only instructors can update enrollments');
-    }
-  }
+  await assertOfferingAccessForUser(
+    currentUserId,
+    offeringId,
+    isAdmin,
+    'instructorOnly',
+    'Only instructors can update enrollments',
+  );
 
   // Check if enrollment exists
   const existingEnrollment = await getHighestAccessEnrollment(
@@ -209,25 +179,16 @@ export const deleteCourseOfferingEnrollment = async (
   res: Response,
 ) => {
   const { userId: currentUserId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
-  const targetUserId = parseInt(req.params.userId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
+  const targetUserId = req.validated!.params!.userId as number;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check permissions - admin or instructor of the offering
-  if (!isAdmin) {
-    const isInstructor = await checkInstructorAccess(currentUserId, offeringId);
-    if (!isInstructor) {
-      throw new ForbiddenError('Only instructors can remove enrollments');
-    }
-  }
+  await assertOfferingAccessForUser(
+    currentUserId,
+    offeringId,
+    isAdmin,
+    'instructorOnly',
+    'Only instructors can remove enrollments',
+  );
 
   // Check if enrollment exists
   const existingEnrollment = await getHighestAccessEnrollment(

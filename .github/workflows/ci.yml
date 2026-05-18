@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, production]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Apply migrations (CI database)
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: file:./prisma/ci.sqlite
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Test with coverage
+        run: npm run test:coverage
+        env:
+          DATABASE_URL: file:./prisma/ci.sqlite
+          ACCESS_TOKEN_SECRET: ci-test-access-secret-min-16chars
+          NODE_ENV: test

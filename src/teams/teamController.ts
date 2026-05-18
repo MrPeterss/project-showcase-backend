@@ -1,3 +1,5 @@
+import { assertOfferingAccessForUser } from '../authorization/courseOfferingGuards.js';
+import { assertTeamReadableByUser } from '../authorization/teamAccess.js';
 import type { Request, Response } from 'express';
 
 import { EnvironmentScope } from '@prisma/client';
@@ -5,15 +7,10 @@ import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import {
-  checkCourseOfferingAccess,
-  checkInstructorAccess,
-  checkTeachingStaffAccess,
+  assertInstructorOrAdmin,
   getHighestAccessEnrollment,
 } from '../utils/authorizationHelpers.js';
-import {
-  ForbiddenError,
-  NotFoundError,
-} from '../utils/AppError.js';
+import { NotFoundError } from '../utils/AppError.js';
 import {
   createTeamWithMembers,
   updateTeamWithMembers,
@@ -58,24 +55,9 @@ const getTeamProject = async (teamId: number) => {
 // GET /course-offerings/:offeringId/teams
 export const getCourseOfferingTeams = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check if user has access to this course offering
-  if (!isAdmin) {
-    const hasAccess = await checkCourseOfferingAccess(userId, offeringId);
-    if (!hasAccess) {
-      throw new ForbiddenError('Access denied to this course offering');
-    }
-  }
+  await assertOfferingAccessForUser(userId, offeringId, isAdmin, 'anyEnrollment');
 
   let canSeeAllMemberNames = isAdmin;
   if (!isAdmin) {
@@ -139,7 +121,7 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
 // GET /teams/:teamId
 export const getTeam = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const teamId = parseInt(req.params.teamId, 10);
+  const teamId = req.validated!.params!.teamId as number;
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -161,21 +143,14 @@ export const getTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Access: admins, instructors/TAs of the course offering, or team members only
-  const isTeamMember = team.members.some((m) => m.userId === userId);
-  let isTeachingStaff = false;
-  if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(
-      userId,
-      team.courseOfferingId,
-    );
-    isTeachingStaff = !!staffAccess;
-    if (!isTeachingStaff && !isTeamMember) {
-      throw new ForbiddenError('Access denied to this team');
-    }
-  } else {
-    isTeachingStaff = true; // admins have staff-level visibility
-  }
+  const { isTeachingStaff, isTeamMember } = await assertTeamReadableByUser({
+    userId,
+    isAdmin,
+    team: {
+      courseOfferingId: team.courseOfferingId,
+      members: team.members,
+    },
+  });
 
   const canSeeMemberNames =
     isAdmin || isTeamMember || isTeachingStaff;
@@ -232,7 +207,7 @@ export const getTeam = async (req: Request, res: Response) => {
 // POST /course-offerings/:offeringId/teams
 export const createTeam = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
   const { name, memberEmails } = req.body;
 
   // Check if course offering exists
@@ -244,13 +219,12 @@ export const createTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin or instructor of the offering (not TA)
-  if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(userId, offeringId);
-    if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can create teams');
-    }
-  }
+  await assertInstructorOrAdmin(
+    userId,
+    isAdmin,
+    offeringId,
+    'Only instructors can create teams',
+  );
 
   // Create team using service (handles name validation, user creation, enrollment)
   const team = await createTeamWithMembers(name, offeringId, memberEmails);
@@ -261,7 +235,7 @@ export const createTeam = async (req: Request, res: Response) => {
 // PUT /teams/:teamId
 export const updateTeam = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const teamId = parseInt(req.params.teamId, 10);
+  const teamId = req.validated!.params!.teamId as number;
   const { name, memberEmails, hallOfFame } = req.body;
 
   const team = await prisma.team.findUnique({
@@ -272,16 +246,12 @@ export const updateTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin or instructor of the course offering (not TA)
-  if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(
-      userId,
-      team.courseOfferingId,
-    );
-    if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can update teams');
-    }
-  }
+  await assertInstructorOrAdmin(
+    userId,
+    isAdmin,
+    team.courseOfferingId,
+    'Only instructors can update teams',
+  );
 
   // Update team using service (handles name validation, user creation, enrollment)
   const updatedTeam = await updateTeamWithMembers(teamId, name, memberEmails, hallOfFame);
@@ -292,7 +262,7 @@ export const updateTeam = async (req: Request, res: Response) => {
 // DELETE /teams/:teamId
 export const deleteTeam = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const teamId = parseInt(req.params.teamId, 10);
+  const teamId = req.validated!.params!.teamId as number;
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -302,16 +272,12 @@ export const deleteTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin or instructor of the course offering (not TA)
-  if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(
-      userId,
-      team.courseOfferingId,
-    );
-    if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can delete teams');
-    }
-  }
+  await assertInstructorOrAdmin(
+    userId,
+    isAdmin,
+    team.courseOfferingId,
+    'Only instructors can delete teams',
+  );
 
   // Delete team using service (handles container cleanup, project deletion, etc.)
   await deleteTeamWithCleanup(teamId);
@@ -322,7 +288,7 @@ export const deleteTeam = async (req: Request, res: Response) => {
 // POST /teams/:teamId/members
 export const addTeamMembers = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const teamId = parseInt(req.params.teamId, 10);
+  const teamId = req.validated!.params!.teamId as number;
   const { memberEmails } = req.body;
 
   const team = await prisma.team.findUnique({
@@ -333,16 +299,12 @@ export const addTeamMembers = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin or instructor of the course offering (not TA)
-  if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(
-      userId,
-      team.courseOfferingId,
-    );
-    if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can add team members');
-    }
-  }
+  await assertInstructorOrAdmin(
+    userId,
+    isAdmin,
+    team.courseOfferingId,
+    'Only instructors can add team members',
+  );
 
   // Add members using service (handles user creation, enrollment, duplicate checking)
   const updatedTeam = await addMembersToTeam(teamId, memberEmails);
@@ -353,8 +315,8 @@ export const addTeamMembers = async (req: Request, res: Response) => {
 // DELETE /teams/:teamId/members/:userId
 export const removeTeamMember = async (req: Request, res: Response) => {
   const { userId: currentUserId, isAdmin } = req.user!;
-  const teamId = parseInt(req.params.teamId, 10);
-  const targetUserId = parseInt(req.params.userId, 10);
+  const teamId = req.validated!.params!.teamId as number;
+  const targetUserId = req.validated!.params!.userId as number;
 
   const team = await prisma.team.findUnique({
     where: { id: teamId },
@@ -364,16 +326,12 @@ export const removeTeamMember = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin or instructor of the course offering (not TA)
-  if (!isAdmin) {
-    const instructorAccess = await checkInstructorAccess(
-      currentUserId,
-      team.courseOfferingId,
-    );
-    if (!instructorAccess) {
-      throw new ForbiddenError('Only instructors can remove team members');
-    }
-  }
+  await assertInstructorOrAdmin(
+    currentUserId,
+    isAdmin,
+    team.courseOfferingId,
+    'Only instructors can remove team members',
+  );
 
   // Check if user is actually a member of the team
   const membership = await prisma.teamMembership.findUnique({
@@ -398,24 +356,9 @@ export const removeTeamMember = async (req: Request, res: Response) => {
 // GET /course-offerings/:offeringId/teams/me
 export const getMyTeamsInOffering = async (req: Request, res: Response) => {
   const { userId, isAdmin } = req.user!;
-  const offeringId = parseInt(req.params.offeringId, 10);
+  const offeringId = req.validated!.params!.offeringId as number;
 
-  // Check if course offering exists
-  const courseOffering = await prisma.courseOffering.findUnique({
-    where: { id: offeringId },
-  });
-
-  if (!courseOffering) {
-    throw new NotFoundError('Course offering not found');
-  }
-
-  // Check if user has access to this course offering
-  if (!isAdmin) {
-    const hasAccess = await checkCourseOfferingAccess(userId, offeringId);
-    if (!hasAccess) {
-      throw new ForbiddenError('Access denied to this course offering');
-    }
-  }
+  await assertOfferingAccessForUser(userId, offeringId, isAdmin, 'anyEnrollment');
 
   // Get teams the user is a member of in this specific course offering
   const teamMemberships = await prisma.teamMembership.findMany({

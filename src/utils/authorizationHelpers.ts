@@ -2,6 +2,7 @@ import type { CourseOfferingRole } from '@prisma/client';
 
 import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
+import { ForbiddenError } from '../utils/AppError.js';
 
 /**
  * Get enrollment with highest access level for a user in a course offering.
@@ -115,3 +116,19 @@ export const checkTeachingStaffAccess = async (
     COURSE_OFFERING_ROLES.TA,
   ]);
 };
+
+/** Admin always passes; otherwise requires instructor enrollment on the offering. */
+export async function assertInstructorOrAdmin(
+  userId: number,
+  isAdmin: boolean,
+  offeringId: number,
+  message = 'Only instructors or admins can perform this action',
+): Promise<void> {
+  if (isAdmin) {
+    return;
+  }
+  const instructorAccess = await checkInstructorAccess(userId, offeringId);
+  if (!instructorAccess) {
+    throw new ForbiddenError(message);
+  }
+}

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { PROJECT_STATUS } from '../constants/projectStatus.js';
 import { docker } from '../docker.js';
 import { prisma } from '../prisma.js';
 import { pruneUntaggedProjects } from '../projects/containerMonitor.js';
@@ -354,7 +355,7 @@ export const pruneProject = async (req: Request, res: Response) => {
     // Get all running projects and add their image hashes to protected set
     const runningProjects = await prisma.project.findMany({
       where: {
-        status: 'running',
+        status: PROJECT_STATUS.RUNNING,
         id: { not: projectId }, // Exclude current project
       },
       select: {
@@ -504,7 +505,7 @@ export const pruneProject = async (req: Request, res: Response) => {
         await prisma.project.update({
           where: { id: projectId },
           data: {
-            status: 'pruned',
+            status: PROJECT_STATUS.PRUNED,
             containerId: null,
             containerName: null,
             dataFile: null,

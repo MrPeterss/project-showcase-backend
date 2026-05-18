@@ -67,6 +67,7 @@ firebase-service-account.json
 # Temporary files
 *.tmp
 *.temp
+/tmp/
 .cache/
 .parcel-cache/
 

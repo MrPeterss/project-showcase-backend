@@ -22,7 +22,7 @@ export const stopAndRemoveContainer = async (containerId: string) => {
     } catch (removeError) {
       console.log(`Failed to remove container ${containerId}:`, removeError);
     }
-  } catch (error) {
+  } catch {
     console.log(`Container ${containerId} not found, continuing`);
   }
 };

@@ -1,18 +1,10 @@
 import { z } from 'zod';
 
+import { projectIdParam, teamIdParam } from '../schemas/paramCoercions.js';
+
 export const deployProjectSchema = z.object({
   body: z.object({
-    teamId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    teamId: teamIdParam,
     githubUrl: z
       .string()
       .url()
@@ -73,7 +65,7 @@ export const deployProjectSchema = z.object({
         }
         
         return parsed;
-      } catch (error) {
+      } catch {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: 'extraEnvVars must be valid JSON',
@@ -86,29 +78,19 @@ export const deployProjectSchema = z.object({
 
 export const getTeamProjectsSchema = z.object({
   params: z.object({
-    teamId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    teamId: teamIdParam,
   }),
 });
 
 export const stopProjectSchema = z.object({
   params: z.object({
-    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+    projectId: projectIdParam,
   }),
 });
 
 export const streamProjectLogsSchema = z.object({
   params: z.object({
-    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+    projectId: projectIdParam,
   }),
   query: z.object({
     tail: z
@@ -126,12 +108,15 @@ export const streamProjectLogsSchema = z.object({
 
 export const streamBuildLogsSchema = z.object({
   params: z.object({
-    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+    projectId: projectIdParam,
   }),
 });
 
 export const redeployProjectSchema = z.object({
   params: z.object({
-    projectId: z.string().transform(Number).pipe(z.number().int().positive()),
+    projectId: projectIdParam,
   }),
 });
+
+/** Routes that only require a validated `:projectId` path param */
+export const projectParamsSchema = stopProjectSchema;

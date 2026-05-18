@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../prisma.js';
 import { cleanupCourseOfferingContainers } from '../projects/containerService.js';
+import { parseStoredCourseOfferingSettings } from './courseOfferingSettingsSchema.js';
 
 /**
  * Delete a course offering and clean up all associated resources.
@@ -72,7 +73,7 @@ export const updateCourseOfferingSettings = async (
     return null;
   }
 
-  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const oldSettings = parseStoredCourseOfferingSettings(courseOffering.settings);
 
   // Process settings changes (handles viewer enrollments, etc.)
   await processCourseOfferingSettings(
@@ -111,7 +112,7 @@ export const lockCourseOfferingServer = async (offeringId: number) => {
     return null;
   }
 
-  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const oldSettings = parseStoredCourseOfferingSettings(courseOffering.settings);
   const newSettings = {
     ...oldSettings,
     serverLocked: true,
@@ -144,7 +145,7 @@ export const unlockCourseOfferingServer = async (offeringId: number) => {
     return null;
   }
 
-  const oldSettings = (courseOffering.settings as Record<string, unknown>) || {};
+  const oldSettings = parseStoredCourseOfferingSettings(courseOffering.settings);
   const newSettings = {
     ...oldSettings,
     serverLocked: false,

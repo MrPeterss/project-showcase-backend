@@ -1,34 +1,26 @@
 import { z } from 'zod';
 
 import { COURSE_OFFERING_ROLE_VALUES } from '../constants/roles.js';
+import { courseOfferingSettingsRecordSchema } from './courseOfferingSettingsSchema.js';
+import { offeringIdParam } from '../schemas/paramCoercions.js';
 
 export const createCourseOfferingSchema = z.object({
   body: z.object({
     courseId: z.number().int().positive(),
     semesterId: z.number().int().positive(),
-    settings: z.record(z.string(), z.any()).optional().default({}),
+    settings: courseOfferingSettingsRecordSchema.optional().default({}),
   }),
 });
 
 export const updateCourseOfferingSchema = z.object({
   body: z.object({
-    settings: z.record(z.string(), z.any()),
+    settings: courseOfferingSettingsRecordSchema,
   }),
 });
 
 export const courseOfferingParamsSchema = z.object({
   params: z.object({
-    offeringId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    offeringId: offeringIdParam,
   }),
 });
 
@@ -40,17 +32,7 @@ export const courseOfferingQuerySchema = z.object({
 
 export const tagCourseOfferingProjectsSchema = z.object({
   params: z.object({
-    offeringId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    offeringId: offeringIdParam,
   }),
   body: z.object({
     tag: z.string().min(1, 'Tag is required and must be a non-empty string'),
@@ -59,17 +41,7 @@ export const tagCourseOfferingProjectsSchema = z.object({
 
 export const removeTagFromCourseOfferingProjectsSchema = z.object({
   params: z.object({
-    offeringId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    offeringId: offeringIdParam,
   }),
   body: z.object({
     tag: z.string().min(1, 'Tag is required and must be a non-empty string'),

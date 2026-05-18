@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { COURSE_OFFERING_ROLE_VALUES } from '../constants/roles.js';
+import { offeringIdParam, userIdParam } from '../schemas/paramCoercions.js';
 
 export const createEnrollmentsSchema = z.object({
   body: z.object({
@@ -24,27 +25,7 @@ export const updateEnrollmentSchema = z.object({
 
 export const enrollmentParamsSchema = z.object({
   params: z.object({
-    offeringId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid offering ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
-    userId: z.string().transform((val, ctx) => {
-      const parsed = parseInt(val, 10);
-      if (isNaN(parsed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Invalid user ID',
-        });
-        return z.NEVER;
-      }
-      return parsed;
-    }),
+    offeringId: offeringIdParam,
+    userId: userIdParam,
   }),
 });

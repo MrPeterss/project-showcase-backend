@@ -222,7 +222,7 @@ const getSparkSecretKey = (): string => {
 
 const callSparkApi = async <T>(
   path: string,
-  options: RequestInit = {},
+  options: Parameters<typeof fetch>[1] = {},
 ): Promise<T> => {
   const baseUrl = getSparkBaseUrl();
   const secretKey = getSparkSecretKey();
