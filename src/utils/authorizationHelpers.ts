@@ -102,8 +102,9 @@ export const checkStudentAccess = async (
 /**
  * Check if a user is course teaching staff (instructor or TA) for an offering.
  *
- * Used for day-to-day course operations (teams, deployments when locked, offering detail).
- * Enrollment management, Spark keys, lock/unlock, and settings changes remain instructor-only.
+ * Used for viewing teams they do not belong to, production env values on team detail,
+ * deploy/redeploy when the offering server is locked, and stop-project rules with locks.
+ * Enrollment API, offering settings, Spark keys, lock/unlock, and course-wide tagging stay instructor-only.
  */
 export const checkTeachingStaffAccess = async (
   userId: number,

@@ -1,11 +1,14 @@
 import type { Request, Response } from 'express';
 
 import { EnvironmentScope } from '@prisma/client';
+import { COURSE_OFFERING_ROLES } from '../constants/roles.js';
 import { prisma } from '../prisma.js';
 import { getTeamPreferredProject } from '../utils/projectUtils.js';
 import {
   checkCourseOfferingAccess,
+  checkInstructorAccess,
   checkTeachingStaffAccess,
+  getHighestAccessEnrollment,
 } from '../utils/authorizationHelpers.js';
 import {
   ForbiddenError,
@@ -74,6 +77,17 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
     }
   }
 
+  let canSeeAllMemberNames = isAdmin;
+  if (!isAdmin) {
+    const enrollment = await getHighestAccessEnrollment(userId, offeringId);
+    if (
+      enrollment?.role === COURSE_OFFERING_ROLES.INSTRUCTOR ||
+      enrollment?.role === COURSE_OFFERING_ROLES.TA
+    ) {
+      canSeeAllMemberNames = true;
+    }
+  }
+
   const teams = await prisma.team.findMany({
     where: { courseOfferingId: offeringId },
     include: {
@@ -102,7 +116,9 @@ export const getCourseOfferingTeams = async (req: Request, res: Response) => {
       });
       return {
         ...team,
-        members: team.members.map((m) => formatMember(m, isAdmin)),
+        members: team.members.map((m) =>
+          formatMember(m, canSeeAllMemberNames),
+        ),
         projects: project
           ? [
               {
@@ -161,7 +177,8 @@ export const getTeam = async (req: Request, res: Response) => {
     isTeachingStaff = true; // admins have staff-level visibility
   }
 
-  const canSeeMemberNames = isAdmin || isTeamMember;
+  const canSeeMemberNames =
+    isAdmin || isTeamMember || isTeachingStaff;
   const members = team.members.map((m) => formatMember(m, canSeeMemberNames));
 
   // Map environments: omit PRODUCTION keyValue unless admin or teaching staff
@@ -227,11 +244,11 @@ export const createTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the offering
+  // Check permissions - admin or instructor of the offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(userId, offeringId);
-    if (!staffAccess) {
-      throw new ForbiddenError('Only instructors or TAs can create teams');
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
+      throw new ForbiddenError('Only instructors can create teams');
     }
   }
 
@@ -255,14 +272,14 @@ export const updateTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the course offering
+  // Check permissions - admin or instructor of the course offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(
+    const instructorAccess = await checkInstructorAccess(
       userId,
       team.courseOfferingId,
     );
-    if (!staffAccess) {
-      throw new ForbiddenError('Only instructors or TAs can update teams');
+    if (!instructorAccess) {
+      throw new ForbiddenError('Only instructors can update teams');
     }
   }
 
@@ -285,14 +302,14 @@ export const deleteTeam = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the course offering
+  // Check permissions - admin or instructor of the course offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(
+    const instructorAccess = await checkInstructorAccess(
       userId,
       team.courseOfferingId,
     );
-    if (!staffAccess) {
-      throw new ForbiddenError('Only instructors or TAs can delete teams');
+    if (!instructorAccess) {
+      throw new ForbiddenError('Only instructors can delete teams');
     }
   }
 
@@ -316,14 +333,14 @@ export const addTeamMembers = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the course offering
+  // Check permissions - admin or instructor of the course offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(
+    const instructorAccess = await checkInstructorAccess(
       userId,
       team.courseOfferingId,
     );
-    if (!staffAccess) {
-      throw new ForbiddenError('Only instructors or TAs can add team members');
+    if (!instructorAccess) {
+      throw new ForbiddenError('Only instructors can add team members');
     }
   }
 
@@ -347,14 +364,14 @@ export const removeTeamMember = async (req: Request, res: Response) => {
     throw new NotFoundError('Team not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the course offering
+  // Check permissions - admin or instructor of the course offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(
+    const instructorAccess = await checkInstructorAccess(
       currentUserId,
       team.courseOfferingId,
     );
-    if (!staffAccess) {
-      throw new ForbiddenError('Only instructors or TAs can remove team members');
+    if (!instructorAccess) {
+      throw new ForbiddenError('Only instructors can remove team members');
     }
   }
 

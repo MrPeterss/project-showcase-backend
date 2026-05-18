@@ -16,7 +16,6 @@ import {
 import {
   checkCourseOfferingAccess,
   checkInstructorAccess,
-  checkTeachingStaffAccess,
 } from '../utils/authorizationHelpers.js';
 import {
   deleteCourseOfferingWithCleanup,
@@ -325,12 +324,12 @@ export const tagCourseOfferingProjects = async (req: Request, res: Response) => 
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the offering
+  // Check permissions - admin or instructor of the offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(userId, offeringId);
-    if (!staffAccess) {
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
       throw new ForbiddenError(
-        'Only admins, instructors, or TAs of the course offering can tag projects',
+        'Only admins or instructors of the course offering can tag projects',
       );
     }
   }
@@ -362,12 +361,12 @@ export const removeTagFromCourseOfferingProjects = async (
     throw new NotFoundError('Course offering not found');
   }
 
-  // Check permissions - admin, instructor, or TA of the offering
+  // Check permissions - admin or instructor of the offering (not TA)
   if (!isAdmin) {
-    const staffAccess = await checkTeachingStaffAccess(userId, offeringId);
-    if (!staffAccess) {
+    const instructorAccess = await checkInstructorAccess(userId, offeringId);
+    if (!instructorAccess) {
       throw new ForbiddenError(
-        'Only admins, instructors, or TAs of the course offering can remove tags',
+        'Only admins or instructors of the course offering can remove tags',
       );
     }
   }
