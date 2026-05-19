@@ -1,5 +1,23 @@
 # project-showcase-backend
 
+Backend service for the Project Showcase platform: **course catalog**, **semester offerings**, **rosters and teams**, **student project deployment** (Docker builds and containers), **Cornell Spark API keys**, and **admin** tooling. Clients authenticate with **Firebase ID tokens**, then use **JWT-backed** API calls.
+
+## Stack
+
+| Layer | Technology |
+| ----- | ---------- |
+| Runtime & language | **Node.js** · **TypeScript** (**ES modules**) |
+| HTTP API | **Express 5** (`src/app.ts` / `src/server.ts`) |
+| Validation | **Zod** (request bodies, params, env) |
+| Data | **Prisma** · **SQL** (`prisma/schema.prisma`, migrations under `prisma/migrations/`) |
+| Auth | **Firebase Admin SDK** (verify ID tokens) · **JWT** access tokens |
+| Deployments & ops | **Dockerode** (containers) · **simple-git** (clone before build) · **node-cron** (container monitor / pruning) |
+| Tests | **Vitest** · **supertest** (`test/`, mirrors `src/`) |
+
+For **environment variables**, **Docker**, **data volumes**, and **curl examples**, continue with the sections below. For **architecture, folder layout, routing patterns, and where to change code**, see **[`docs/README.md`](docs/README.md)** (module guides under [`docs/`](docs/)).
+
+---
+
 ## Environment Configuration
 
 This application uses environment variables for configuration. Follow these steps to set up your environment:
@@ -14,22 +32,26 @@ cp .env.example .env
 
 ### 2. Configure Environment Variables
 
-Edit your `.env` file with the following variables:
+The variables below match **[`.env.example`](.env.example)**—use the commands in §1 first, then fill in real values (especially **`ACCESS_TOKEN_SECRET`**, **`DATABASE_URL`**, and Spark settings if needed).
 
-| Variable                        | Description                                                     | Default                           | Example                                    |
-| ------------------------------- | --------------------------------------------------------------- | --------------------------------- | ------------------------------------------ |
-| `ADMIN_EMAILS`                  | Comma-separated admin emails                                    | (empty)                           | `admin1@example.com,admin2@example.com`    |
-| `PORT`                          | Server port                                                     | `3000`                            | `3000`                                     |
-| `NODE_ENV`                      | Environment mode                                                | `development`                     | `development`, `production`, `test`        |
-| `DATABASE_URL`                  | Database connection string                                      | `file:./dev.db`                   | `postgresql://user:pass@localhost:5432/db` |
-| `RATE_LIMIT_WINDOW_MS`          | Rate limit window in milliseconds                               | `900000` (15 min)                 | `900000`                                   |
-| `RATE_LIMIT_MAX_REQUESTS`       | Max requests per window                                         | `100`                             | `100`                                      |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | Path to Firebase service account JSON                           | `./firebase-service-account.json` | `./config/firebase.json`                   |
-| `PRISMA_LOG_QUERIES`            | Enable query logging                                            | `true`                            | `true`, `false`                            |
-| `PRISMA_LOG_ERRORS`             | Enable error logging                                            | `true`                            | `true`, `false`                            |
-| `PRISMA_LOG_WARNINGS`           | Enable warning logging                                          | `true`                            | `true`, `false`                            |
-| `DATA_FILES_DIR`                | Directory where uploaded data files are stored (container path) | `/app/data/project-data-files`    | `/app/data/project-data-files`             |
-| `DATA_FILES_HOST_DIR`           | Host/server path for data files (used for Docker bind mounts)   | (empty - uses `DATA_FILES_DIR`)   | `/home/shared/project-data-files`          |
+| Variable | Description | Default in `.env.example` |
+| -------- | ----------- | ------------------------- |
+| `ADMIN_EMAILS` | Comma-separated emails seeded as admins when you run **`npm run seed`** | _(empty)_ |
+| `ACCESS_TOKEN_SECRET` | Secret for JWT access tokens; **minimum 16 characters** (validated in `src/config/env.ts`) | _(must be set)_ |
+| `PORT` | HTTP listen port (see `server.ts`; defaults to `8000` if unset at runtime) | `8000` |
+| `NODE_ENV` | `development`, `production`, or `test` | `development` |
+| `DATABASE_URL` | Prisma connection string | `file:./sqlite.db` |
+| `RATE_LIMIT_WINDOW_MS` | Per-user rate limit window (`middleware/rateLimit.ts`) | `900000` (15 minutes) |
+| `RATE_LIMIT_MAX_REQUESTS` | Requests allowed per window per authenticated user | `100` |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | Firebase Admin service-account JSON path for login verification | `./firebase-service-account.json` |
+| `PRISMA_LOG_QUERIES` | When `true`, enables query logging **only while** **`NODE_ENV=development`** (`prisma.ts`) | `true` |
+| `PRISMA_LOG_ERRORS` | When not `false`, log Prisma client errors | `true` |
+| `PRISMA_LOG_WARNINGS` | When not `false`, log Prisma warnings | `true` |
+| `DATA_FILES_DIR` | Upload directory for deployment data files; persist via volume in Docker | `/app/data/project-data-files` |
+| `SPARK_BASE_URL` | Cornell Spark API base URL (**required** when hitting Spark endpoints; see `spark/sparkService.ts`) | _(empty until configured)_ |
+| `SPARK_SECRET_KEY` | Server secret for Spark calls (**required** with `SPARK_BASE_URL` when using Spark) | _(empty until configured)_ |
+
+**Also used by code but not shipped in `.env.example`:** add when needed—`DATA_FILES_HOST_DIR` (host path mapping for uploads / admin paths), `DOCKER_SOCKET_PATH`, and `MAX_CONCURRENT_BUILDS` (deploy queue concurrency).
 
 ### 3. Seed Admin Users
 
