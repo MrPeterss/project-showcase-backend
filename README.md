@@ -9,7 +9,7 @@ Backend service for the Project Showcase platform: **course catalog**, **semeste
 | Runtime & language | **Node.js** · **TypeScript** (**ES modules**) |
 | HTTP API | **Express 5** (`src/app.ts` / `src/server.ts`) |
 | Validation | **Zod** (request bodies, params, env) |
-| Data | **Prisma** · **SQL** (`prisma/schema.prisma`, migrations under `prisma/migrations/`) |
+| Data | **Prisma** · **SQLite** (`prisma/schema.prisma`, migrations under `prisma/migrations/`) |
 | Auth | **Firebase Admin SDK** (verify ID tokens) · **JWT** access tokens |
 | Deployments & ops | **Dockerode** (containers) · **simple-git** (clone before build) · **node-cron** (container monitor / pruning) |
 | Tests | **Vitest** · **supertest** (`test/`, mirrors `src/`) |
